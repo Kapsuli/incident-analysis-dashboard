@@ -325,44 +325,55 @@ def calculate_daily_stats(df):
     return pd.DataFrame(daily_stats)
 
 def create_combined_chart(hourly_df):
-    """Luo yhdistetty kaavio"""
+    """Luo yhdistetty kaavio paremmilla tooltip-näkymillä"""
     fig = make_subplots(
         rows=1, cols=1,
         specs=[[{"secondary_y": True}]],
         subplot_titles=["Yhdistetty analyysi"]
     )
     
-    # Pylväskaavio incidenteille
+    # Pylväskaavio incidenteille - parannetulla tooltip
     fig.add_trace(
         go.Bar(
             x=hourly_df['hour_str'],
             y=hourly_df['avg_incidents'],
             name='Keskimääräiset incidentit',
-            marker_color='lightblue'
+            marker_color='lightblue',
+            hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                         '<b>Keskimääräiset incidentit:</b> %{y:.2f}<br>' +
+                         '<extra></extra>'
         ),
         secondary_y=False
     )
     
-    # Viivakaavio incidenteille per työntekijä
+    # Viivakaavio incidenteille per työntekijä - parannetulla tooltip
     fig.add_trace(
         go.Scatter(
             x=hourly_df['hour_str'],
             y=hourly_df['incidents_per_worker'],
             name='Incidentit/työntekijä',
             line=dict(color='red', width=3),
-            mode='lines+markers'
+            mode='lines+markers',
+            marker=dict(size=8),
+            hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                         '<b>Incidentit/työntekijä:</b> %{y:.2f}<br>' +
+                         '<extra></extra>'
         ),
         secondary_y=True
     )
     
-    # Viivakaavio työntekijämäärille
+    # Viivakaavio työntekijämäärille - parannetulla tooltip
     fig.add_trace(
         go.Scatter(
             x=hourly_df['hour_str'],
             y=hourly_df['worker_count'],
             name='Työntekijämäärä',
             line=dict(color='green', width=2),
-            mode='lines+markers'
+            mode='lines+markers',
+            marker=dict(size=6),
+            hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                         '<b>Työntekijämäärä:</b> %{y}<br>' +
+                         '<extra></extra>'
         ),
         secondary_y=True
     )
@@ -371,7 +382,16 @@ def create_combined_chart(hourly_df):
     fig.update_yaxes(title_text="Incidentit", secondary_y=False)
     fig.update_yaxes(title_text="Incidentit/työntekijä & Työntekijämäärä", secondary_y=True)
     
-    fig.update_layout(height=500, showlegend=True)
+    fig.update_layout(
+        height=500, 
+        showlegend=True,
+        hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=14,
+            font_family="Arial"
+        )
+    )
     
     return fig
 
@@ -517,7 +537,21 @@ def main():
                                     x='hour_str', 
                                     y='incidents_per_worker',
                                     title='Incidentit per työntekijä tunnissa',
-                                    markers=True
+                                    markers=True,
+                                    hover_data={
+                                        'hour_str': False,
+                                        'incidents_per_worker': ':.2f',
+                                        'worker_count': True,
+                                        'avg_incidents': ':.2f'
+                                    }
+                                )
+                                fig.update_traces(
+                                    hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                                                 '<b>Incidentit/työntekijä:</b> %{y:.2f}<br>' +
+                                                 '<b>Työntekijämäärä:</b> %{customdata[0]}<br>' +
+                                                 '<b>Keskimääräiset incidentit:</b> %{customdata[1]:.2f}<br>' +
+                                                 '<extra></extra>',
+                                    customdata=hourly_stats[['worker_count', 'avg_incidents']].values
                                 )
                                 fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
                                              annotation_text="Päivätyöntekijöiden tavoite (5.1)")
@@ -529,7 +563,21 @@ def main():
                                     hourly_stats, 
                                     x='hour_str', 
                                     y='avg_incidents',
-                                    title='Keskimääräiset incidentit tunneittain'
+                                    title='Keskimääräiset incidentit tunneittain',
+                                    hover_data={
+                                        'hour_str': False,
+                                        'avg_incidents': ':.2f',
+                                        'worker_count': True,
+                                        'incidents_per_worker': ':.2f'
+                                    }
+                                )
+                                fig.update_traces(
+                                    hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                                                 '<b>Keskimääräiset incidentit:</b> %{y:.2f}<br>' +
+                                                 '<b>Työntekijämäärä:</b> %{customdata[0]}<br>' +
+                                                 '<b>Incidentit/työntekijä:</b> %{customdata[1]:.2f}<br>' +
+                                                 '<extra></extra>',
+                                    customdata=hourly_stats[['worker_count', 'incidents_per_worker']].values
                                 )
                             
                             else:  # Työntekijämäärät
@@ -537,10 +585,34 @@ def main():
                                     hourly_stats, 
                                     x='hour_str', 
                                     y='worker_count',
-                                    title='Työntekijämäärät tunneittain'
+                                    title='Työntekijämäärät tunneittain',
+                                    hover_data={
+                                        'hour_str': False,
+                                        'worker_count': True,
+                                        'avg_incidents': ':.2f',
+                                        'incidents_per_worker': ':.2f'
+                                    }
+                                )
+                                fig.update_traces(
+                                    hovertemplate='<b>Kelloaika:</b> %{x}<br>' +
+                                                 '<b>Työntekijämäärä:</b> %{y}<br>' +
+                                                 '<b>Keskimääräiset incidentit:</b> %{customdata[0]:.2f}<br>' +
+                                                 '<b>Incidentit/työntekijä:</b> %{customdata[1]:.2f}<br>' +
+                                                 '<extra></extra>',
+                                    customdata=hourly_stats[['avg_incidents', 'incidents_per_worker']].values
                                 )
                             
-                            fig.update_layout(height=500)
+                            # Yhteinen hover-tyyli kaikille kaavioille
+                            fig.update_layout(
+                                height=500,
+                                hovermode='x unified',
+                                hoverlabel=dict(
+                                    bgcolor="white",
+                                    font_size=14,
+                                    font_family="Arial",
+                                    bordercolor="gray"
+                                )
+                            )
                             st.plotly_chart(fig, use_container_width=True)
                             
                         except Exception as e:
@@ -558,7 +630,9 @@ def main():
                         try:
                             calendar_html = create_calendar_view(daily_stats)
                             if calendar_html:
-                                st.markdown(calendar_html, unsafe_allow_html=True)
+                                # Käytä components.html korkeammalla height-arvolla
+                                import streamlit.components.v1 as components
+                                components.html(calendar_html, height=700, scrolling=False)
                             else:
                                 st.warning("Kalenterin luonti epäonnistui.")
                         except Exception as e:
@@ -596,16 +670,37 @@ def main():
                                     'value': 'Inc/työnt./h', 
                                     'variable': 'Vuoro',
                                     'date': 'Päivämäärä'
+                                },
+                                hover_data={
+                                    'date': False,
+                                    'value': ':.2f'
                                 }
                             )
                             
-                            # Muuta legendan nimet suomeksi
-                            fig_daily.for_each_trace(lambda t: t.update(name='Päivätyöntekijät' if 'day_shift_avg' in t.name else 'Yötyöntekijät'))
+                            # Muuta legendan nimet suomeksi ja paranna tooltip
+                            fig_daily.for_each_trace(
+                                lambda t: t.update(
+                                    name='Päivätyöntekijät' if 'day_shift_avg' in t.name else 'Yötyöntekijät',
+                                    hovertemplate='<b>Päivämäärä:</b> %{x}<br>' +
+                                                 '<b>' + ('Päivätyöntekijät' if 'day_shift_avg' in t.name else 'Yötyöntekijät') + ':</b> %{y:.2f}<br>' +
+                                                 '<extra></extra>'
+                                )
+                            )
                             
                             fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red", 
                                               annotation_text="Päivätyöntekijöiden tavoite (5.1)")
                             fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue", 
                                               annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                            
+                            fig_daily.update_layout(
+                                hovermode='x unified',
+                                hoverlabel=dict(
+                                    bgcolor="white",
+                                    font_size=14,
+                                    font_family="Arial",
+                                    bordercolor="gray"
+                                )
+                            )
                             st.plotly_chart(fig_daily, use_container_width=True)
                         except Exception as e:
                             st.error(f"Virhe päivittäisen kehityksen kaavion luonnissa: {str(e)}")
