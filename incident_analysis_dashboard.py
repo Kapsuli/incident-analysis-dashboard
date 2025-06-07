@@ -1,35 +1,4 @@
-# PowerPoint-raportin lataus
-                st.markdown("---")
-                st.subheader("📄 Luo mukautettu PowerPoint-raportti")
-                
-                # Valintamahdollisuudet
-                st.markdown("**Valitse mitä osioita haluat mukaan raporttiin:**")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    include_summary = st.checkbox("🎯 Tuottavuustavoitteiden tulokset", value=True, help="Päivä- ja yötyöntekijöiden tavoitteiden täyttyminen")
-                    include_monthly = st.checkbox("📊 Kuukauden yhteenveto", value=True, help="Päivittäisten tavoitteiden prosentit ja kuukauden ääripäät")
-                    include_recommendations = st.checkbox("💡 Optimointisuositukset", value=True, help="Konkreettiset toimenpide-ehdotukset ja kokonaisarvio")
-                
-                with col2:
-                    include_hourly = st.checkbox("⏰ Tuntikohtainen analyysi", value=False, help="Tuottavimmat ja vähiten tuottavat tunnit")
-                    include_data_table = st.checkbox("📋 Päivittäisten tulosten taulukko", value=False, help="Yksityiskohtainen datataulukko kaikista päivistä")
-                
-                # Näytä kuinka monta diaa tulee
-                selected_count = sum([include_summary, include_monthly, include_recommendations, include_hourly, include_data_table]) + 1  # +1 otsikkodia
-                st.info(f"📄 Raportti sisältää {selected_count} diaa (sis. otsikkodia)")
-                
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    if st.button("🎯 Luo PowerPoint-raportti", type="primary", use_container_width=True):
-                        # Tarkista että vähintään yksi osio on valittu
-                        if not any([include_summary, include_monthly, include_recommendations, include_hourly, include_data_table]):
-                            st.error("❌ Valitse vähintään yksi osio raporttiin!")
-                        else:
-                            with st.spinner("Luodaan PowerPoint-raporttia..."):
-                                try:
-                                    # Kerää valitut osiotimport streamlit as st
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
