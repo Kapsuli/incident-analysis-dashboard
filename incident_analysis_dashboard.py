@@ -6,16 +6,167 @@ from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import calendar
+import locale
+
+# Aseta suomenkielinen lokalisaatio
+try:
+    locale.setlocale(locale.LC_TIME, 'fi_FI.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'Finnish_Finland.1252')  # Windows
+    except:
+        pass  # Käytä oletusta jos ei onnistu
 
 # Sivun konfiguraatio
 st.set_page_config(
-    page_title="Incident Analysis Dashboard",
+    page_title="Hälytysten Analyysihallinta",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-def get_worker_count(hour):
+# Suomenkieliset nimet
+FINNISH_MONTHS = [
+    "Tammikuu", "Helmikuu", "Maaliskuu", "Huhtikuu", "Toukokuu", "Kesäkuu",
+    "Heinäkuu", "Elokuu", "Syyskuu", "Lokakuu", "Marraskuu", "Joulukuu"
+]
+
+FINNISH_WEEKDAYS = ["Ma", "Ti", "Ke", "To", "Pe", "La", "Su"]
+FINNISH_WEEKDAYS_LONG = ["Maanantai", "Tiistai", "Keskiviikko", "Torstai", "Perjantai", "Lauantai", "Sunnuntai"]
+
+def get_finnish_weekday(date_obj):
+    """Palauttaa suomenkielisen viikonpäivän nimen"""
+    if pd.isna(date_obj):
+        return "Tuntematon"
+    weekday_num = date_obj.weekday()  # 0=Maanantai, 6=Sunnuntai
+    return FINNISH_WEEKDAYS_LONG[weekday_num]
+
+def get_finnish_month_name(month_num):
+    """Palauttaa suomenkielisen kuukauden nimen"""
+    return FINNISH_MONTHS[month_num - 1]
+
+def create_calendar_view(daily_stats):
+    """Luo kalenterinäkymä päivittäisistä tilastoista"""
+    if len(daily_stats) == 0:
+        return None
+    
+    # Muunna päivämäärät datetime-objekteiksi
+    daily_stats = daily_stats.copy()
+    daily_stats['date_obj'] = pd.to_datetime(daily_stats['date'])
+    
+    # Määritä kuukausi ja vuosi
+    first_date = daily_stats['date_obj'].min()
+    last_date = daily_stats['date_obj'].max()
+    
+    # Jos kaikki data on samalta kuukaudelta
+    if first_date.month == last_date.month and first_date.year == last_date.year:
+        month = first_date.month
+        year = first_date.year
+    else:
+        # Käytä ensimmäistä kuukautta
+        month = first_date.month
+        year = first_date.year
+    
+    # Luo kuukauden kalenteri
+    cal = calendar.monthcalendar(year, month)
+    
+    # Luo HTML-taulukko
+    month_name = get_finnish_month_name(month)
+    html = f"""
+    <div style="margin: 20px 0;">
+        <h3 style="text-align: center; margin-bottom: 20px; color: #1f77b4;">
+            {month_name} {year}
+        </h3>
+        <div style="text-align: right; margin-bottom: 10px; font-size: 14px;">
+            <span style="color: #666;">Rauhallisin: </span>
+            <span style="background-color: #d4edda; padding: 2px 8px; border-radius: 3px; font-weight: bold;">
+                {daily_stats.loc[daily_stats['total_incidents'].idxmin(), 'day']:.0f} ({daily_stats['total_incidents'].min():.0f} inc)
+            </span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin: 0 auto; max-width: 900px;">
+            <thead>
+                <tr style="background-color: #f8f9fa;">
+    """
+    
+    # Viikonpäivien otsikot
+    for day_name in FINNISH_WEEKDAYS:
+        html += f'<th style="padding: 10px; text-align: center; border: 1px solid #dee2e6; font-weight: bold; color: #495057;">{day_name}</th>'
+    
+    html += """
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    # Kalenterin rivit
+    for week in cal:
+        html += '<tr>'
+        for day in week:
+            if day == 0:
+                # Tyhjä päivä
+                html += '<td style="padding: 15px; border: 1px solid #dee2e6; background-color: #f8f9fa;"></td>'
+            else:
+                # Etsi päivän data
+                day_data = daily_stats[daily_stats['date_obj'].dt.day == day]
+                
+                if len(day_data) > 0:
+                    row = day_data.iloc[0]
+                    
+                    # Määritä väri tavoitteiden perusteella
+                    if row['day_target_met'] and row['night_target_met']:
+                        bg_color = "#d4edda"  # Vihreä - molemmat tavoitteet täytetty
+                        border_color = "#28a745"
+                        status_text = "Molemmat tavoitteet täytetty"
+                    elif row['day_target_met'] or row['night_target_met']:
+                        bg_color = "#fff3cd"  # Keltainen - yksi tavoite täytetty
+                        border_color = "#ffc107"
+                        status_text = "Yksi tavoite täytetty"
+                    else:
+                        bg_color = "#f8d7da"  # Punainen - kumpikaan tavoite ei täytetty
+                        border_color = "#dc3545"
+                        status_text = "Kumpikaan tavoite ei täytetty"
+                    
+                    # Lisää valittu päivä -efekti (voidaan laajentaa myöhemmin)
+                    if day == first_date.day:
+                        border_style = f"3px solid {border_color}"
+                    else:
+                        border_style = f"1px solid {border_color}"
+                    
+                    html += f"""
+                    <td style="padding: 8px; border: {border_style}; background-color: {bg_color}; vertical-align: top; position: relative;">
+                        <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">{day}</div>
+                        <div style="font-size: 11px; line-height: 1.2;">
+                            <div style="color: #2c5aa0; font-weight: bold;">P: {row['day_shift_avg']:.2f}</div>
+                            <div style="color: #6f42c1; font-weight: bold;">Y: {row['night_shift_avg']:.2f}</div>
+                            <div style="color: #666; margin-top: 2px;">{row['total_incidents']:.0f} inc</div>
+                        </div>
+                    </td>
+                    """
+                else:
+                    # Ei dataa tälle päivälle
+                    html += f"""
+                    <td style="padding: 15px; border: 1px solid #dee2e6; background-color: #ffffff; vertical-align: top;">
+                        <div style="font-weight: bold; color: #999;">{day}</div>
+                        <div style="font-size: 11px; color: #ccc; margin-top: 5px;">Ei dataa</div>
+                    </td>
+                    """
+        html += '</tr>'
+    
+    html += """
+            </tbody>
+        </table>
+        <div style="margin-top: 15px; font-size: 12px; color: #666;">
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #d4edda; border: 1px solid #28a745; margin-right: 5px;"></span>Molemmat tavoitteet täytetty</span>
+                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span>Yksi tavoite täytetty</span>
+                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #f8d7da; border: 1px solid #dc3545; margin-right: 5px;"></span>Kumpikaan tavoite ei täytetty</span>
+                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #ffffff; border: 1px solid #dee2e6; margin-right: 5px;"></span>Ei dataa</span>
+            </div>
+        </div>
+    </div>
+    """
+    
+    return html
     """Laske työntekijämäärä tunnin perusteella"""
     workers = 0
     
@@ -79,7 +230,7 @@ def process_data(df):
         df_clean['workers'] = df_clean['Hour'].apply(get_worker_count)
         df_clean['incidents_per_worker'] = df_clean['Incidents handled by agent'] / df_clean['workers']
         
-        # Käsittele päivämäärät
+                # Käsittele päivämäärät
         if 'Date' in df.columns:
             try:
                 # Kokeile eri päivämäärämuotoja
@@ -94,24 +245,24 @@ def process_data(df):
                 if df_clean['date'].isna().all():
                     df_clean['date'] = datetime.now().date()
                     df_clean['date_str'] = df_clean['date'].astype(str)
-                    df_clean['day_name'] = 'Unknown'
+                    df_clean['day_name'] = 'Tuntematon'
                     df_clean['day'] = 1
                 else:
                     df_clean['date_str'] = df_clean['date'].dt.strftime('%Y-%m-%d')
-                    df_clean['day_name'] = df_clean['date'].dt.day_name()
+                    df_clean['day_name'] = df_clean['date'].apply(get_finnish_weekday)
                     df_clean['day'] = df_clean['date'].dt.day
                     
             except Exception as e:
                 st.warning(f"Päivämäärien käsittely epäonnistui: {str(e)}. Käytetään oletuspäivämääriä.")
                 df_clean['date'] = datetime.now().date()
                 df_clean['date_str'] = df_clean['date'].astype(str)
-                df_clean['day_name'] = 'Unknown'
+                df_clean['day_name'] = 'Tuntematon'
                 df_clean['day'] = 1
         else:
             # Jos ei päivämääriä, luo dummy-päivämäärät
             df_clean['date'] = datetime.now().date()
             df_clean['date_str'] = df_clean['date'].astype(str)
-            df_clean['day_name'] = 'Unknown'
+            df_clean['day_name'] = 'Tuntematon'
             df_clean['day'] = 1
         
         return df_clean
@@ -158,7 +309,7 @@ def calculate_daily_stats(df):
         
         daily_stats.append({
             'date': date_str,
-            'day_name': day_data['day_name'].iloc[0] if len(day_data) > 0 else 'Unknown',
+            'day_name': day_data['day_name'].iloc[0] if len(day_data) > 0 else 'Tuntematon',
             'day': day_data['day'].iloc[0] if len(day_data) > 0 else 1,
             'total_incidents': day_data['Incidents handled by agent'].sum(),
             'day_shift_avg': round(day_shift_avg, 2),
@@ -222,7 +373,7 @@ def create_combined_chart(hourly_df):
 
 def main():
     # Otsikko
-    st.title("📊 Incident Analysis Dashboard")
+    st.title("📊 Hälytysten Analyysihallinta")
     st.markdown("**Lataa Excel-tiedosto ja saa automaattinen analyysi hälytysten määrästä suhteessa työntekijöihin**")
     
     # Sivupalkki
@@ -396,10 +547,16 @@ def main():
                         st.warning("Ei dataa kaavion piirtämiseen.")
                 
                 with tab3:
-                    st.subheader("Kuukausinäkymä")
+                    st.subheader("📅 Kuukausinäkymä")
                     
                     if len(daily_stats) > 1:
+                        # Luo kalenterinäkymä
+                        calendar_html = create_calendar_view(daily_stats)
+                        if calendar_html:
+                            st.markdown(calendar_html, unsafe_allow_html=True)
+                        
                         # Kuukausistatistiikat
+                        st.subheader("📊 Kuukauden yhteenveto")
                         col1, col2, col3, col4 = st.columns(4)
                         
                         day_target_met = len(daily_stats[daily_stats['day_target_met']]) 
@@ -412,10 +569,10 @@ def main():
                             st.metric("Yötyöntekijät", f"{night_target_met}/{total_days}", f"{night_target_met/total_days*100:.1f}%")
                         with col3:
                             max_day = daily_stats.loc[daily_stats['total_incidents'].idxmax()]
-                            st.metric("Kiireisin päivä", f"{max_day['day']} ({max_day['day_name']})", f"{max_day['total_incidents']} inc")
+                            st.metric("Kiireisin päivä", f"{max_day['day']:.0f}. ({max_day['day_name']})", f"{max_day['total_incidents']:.0f} inc")
                         with col4:
                             min_day = daily_stats.loc[daily_stats['total_incidents'].idxmin()]
-                            st.metric("Rauhallisinta", f"{min_day['day']} ({min_day['day_name']})", f"{min_day['total_incidents']} inc")
+                            st.metric("Rauhallisin päivä", f"{min_day['day']:.0f}. ({min_day['day_name']})", f"{min_day['total_incidents']:.0f} inc")
                         
                         # Päivittäinen kehitys
                         try:
@@ -424,10 +581,20 @@ def main():
                                 x='date', 
                                 y=['day_shift_avg', 'night_shift_avg'],
                                 title='Päivittäinen kehitys',
-                                labels={'value': 'Inc/työnt./h', 'variable': 'Vuoro'}
+                                labels={
+                                    'value': 'Inc/työnt./h', 
+                                    'variable': 'Vuoro',
+                                    'date': 'Päivämäärä'
+                                }
                             )
-                            fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red")
-                            fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue")
+                            
+                            # Muuta legendan nimet suomeksi
+                            fig_daily.for_each_trace(lambda t: t.update(name='Päivätyöntekijät' if 'day_shift_avg' in t.name else 'Yötyöntekijät'))
+                            
+                            fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                              annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                            fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                              annotation_text="Yötyöntekijöiden tavoite (4.6)")
                             st.plotly_chart(fig_daily, use_container_width=True)
                         except Exception as e:
                             st.error(f"Virhe päivittäisen kehityksen kaavion luonnissa: {str(e)}")
@@ -435,13 +602,13 @@ def main():
                             st.dataframe(daily_stats[['date', 'day_shift_avg', 'night_shift_avg']])
                         
                         # Päivittäinen taulukko
-                        st.subheader("Päivittäiset tulokset")
+                        st.subheader("📋 Päivittäiset tulokset")
                         daily_display = daily_stats.copy()
                         daily_display['Päivätyöntekijät'] = daily_display.apply(
-                            lambda x: f"{x['day_shift_avg']} {'✅' if x['day_target_met'] else '❌'}", axis=1
+                            lambda x: f"{x['day_shift_avg']:.2f} {'✅' if x['day_target_met'] else '❌'}", axis=1
                         )
                         daily_display['Yötyöntekijät'] = daily_display.apply(
-                            lambda x: f"{x['night_shift_avg']} {'✅' if x['night_target_met'] else '❌'}", axis=1
+                            lambda x: f"{x['night_shift_avg']:.2f} {'✅' if x['night_target_met'] else '❌'}", axis=1
                         )
                         
                         st.dataframe(
