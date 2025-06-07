@@ -34,6 +34,26 @@ FINNISH_MONTHS = [
 FINNISH_WEEKDAYS = ["Ma", "Ti", "Ke", "To", "Pe", "La", "Su"]
 FINNISH_WEEKDAYS_LONG = ["Maanantai", "Tiistai", "Keskiviikko", "Torstai", "Perjantai", "Lauantai", "Sunnuntai"]
 
+def get_worker_count(hour):
+    """Laske työntekijämäärä tunnin perusteella"""
+    workers = 0
+    
+    # Yövuoro 19:15-07:15 (2 henkilöä)
+    if hour >= 19 or hour < 7:
+        workers += 2
+    
+    # Aamuvuoro 07:00-17:00 (3 henkilöä)
+    if hour >= 7 and hour < 17:
+        workers += 3
+    
+    # Iltavuorot (portaittain)
+    if hour >= 9 and hour < 19: workers += 1  # 09:15-19:15
+    if hour >= 10 and hour < 20: workers += 1  # 10:00-20:00
+    if hour >= 11 and hour < 21: workers += 1  # 11:00-21:00
+    if hour >= 13 and hour < 23: workers += 1  # 13:00-23:00
+    
+    return workers
+
 def get_finnish_weekday(date_obj):
     """Palauttaa suomenkielisen viikonpäivän nimen"""
     if pd.isna(date_obj):
