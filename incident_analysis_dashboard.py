@@ -35,6 +35,7 @@ def get_worker_count(hour):
     
     return workers
 
+@st.cache_data
 def process_data(df):
     """Käsittele Excel-data analyysiin"""
     try:
@@ -45,16 +46,33 @@ def process_data(df):
                 st.error(f"Saraketta '{col}' ei löydy datasta. Tarkista Excel-tiedosto.")
                 return None
         
+        # Tee kopio datasta
+        df_clean = df.copy()
+        
+        # Muunna Hour-sarake numeroiksi
+        try:
+            df_clean['Hour'] = pd.to_numeric(df_clean['Hour'], errors='coerce')
+        except Exception as e:
+            st.error(f"Virhe Hour-sarakkeen muunnossa: {str(e)}")
+            return None
+        
+        # Muunna Incidents-sarake numeroiksi
+        try:
+            df_clean['Incidents handled by agent'] = pd.to_numeric(df_clean['Incidents handled by agent'], errors='coerce')
+        except Exception as e:
+            st.error(f"Virhe Incidents-sarakkeen muunnossa: {str(e)}")
+            return None
+        
         # Suodata vain validi data
-        df_clean = df[
-            (df['Hour'].notna()) & 
-            (df['Incidents handled by agent'].notna()) &
-            (df['Hour'] >= 0) & 
-            (df['Hour'] <= 23)
+        df_clean = df_clean[
+            (df_clean['Hour'].notna()) & 
+            (df_clean['Incidents handled by agent'].notna()) &
+            (df_clean['Hour'] >= 0) & 
+            (df_clean['Hour'] <= 23)
         ].copy()
         
         if len(df_clean) == 0:
-            st.error("Ei validia dataa löydetty.")
+            st.error("Ei validia dataa löydetty. Tarkista että Hour-sarake sisältää numeroita 0-23 ja Incidents-sarake sisältää numeroita.")
             return None
         
         # Lisää työntekijämäärät ja laskelmat
@@ -63,15 +81,32 @@ def process_data(df):
         
         # Käsittele päivämäärät
         if 'Date' in df.columns:
-            # Excel serial date → datetime
-            if df_clean['Date'].dtype in ['int64', 'float64']:
-                df_clean['date'] = pd.to_datetime('1900-01-01') + pd.to_timedelta(df_clean['Date'] - 2, unit='D')
-            else:
-                df_clean['date'] = pd.to_datetime(df_clean['Date'])
-            
-            df_clean['date_str'] = df_clean['date'].dt.strftime('%Y-%m-%d')
-            df_clean['day_name'] = df_clean['date'].dt.day_name()
-            df_clean['day'] = df_clean['date'].dt.day
+            try:
+                # Kokeile eri päivämäärämuotoja
+                if df_clean['Date'].dtype in ['int64', 'float64']:
+                    # Excel serial date
+                    df_clean['date'] = pd.to_datetime('1900-01-01') + pd.to_timedelta(df_clean['Date'] - 2, unit='D')
+                else:
+                    # Tavallinen päivämäärämerkkijono
+                    df_clean['date'] = pd.to_datetime(df_clean['Date'], errors='coerce')
+                
+                # Jos päivämäärien muunto epäonnistui, käytä nykyistä päivää
+                if df_clean['date'].isna().all():
+                    df_clean['date'] = datetime.now().date()
+                    df_clean['date_str'] = df_clean['date'].astype(str)
+                    df_clean['day_name'] = 'Unknown'
+                    df_clean['day'] = 1
+                else:
+                    df_clean['date_str'] = df_clean['date'].dt.strftime('%Y-%m-%d')
+                    df_clean['day_name'] = df_clean['date'].dt.day_name()
+                    df_clean['day'] = df_clean['date'].dt.day
+                    
+            except Exception as e:
+                st.warning(f"Päivämäärien käsittely epäonnistui: {str(e)}. Käytetään oletuspäivämääriä.")
+                df_clean['date'] = datetime.now().date()
+                df_clean['date_str'] = df_clean['date'].astype(str)
+                df_clean['day_name'] = 'Unknown'
+                df_clean['day'] = 1
         else:
             # Jos ei päivämääriä, luo dummy-päivämäärät
             df_clean['date'] = datetime.now().date()
@@ -185,22 +220,6 @@ def create_combined_chart(hourly_df):
     
     return fig
 
-def create_monthly_calendar(daily_df):
-    """Luo kuukausikalenteri"""
-    if len(daily_df) == 0:
-        return None
-    
-    # Ryhmittele kuukausittain
-    daily_df['month'] = pd.to_datetime(daily_df['date']).dt.month
-    daily_df['year'] = pd.to_datetime(daily_df['date']).dt.year
-    
-    # Ota ensimmäinen kuukausi
-    first_month = daily_df['month'].iloc[0]
-    first_year = daily_df['year'].iloc[0]
-    month_data = daily_df[(daily_df['month'] == first_month) & (daily_df['year'] == first_year)]
-    
-    return month_data
-
 def main():
     # Otsikko
     st.title("📊 Incident Analysis Dashboard")
@@ -250,11 +269,18 @@ def main():
             # Näytä datan otsikko
             with st.expander("📋 Näytä raakadata (ensimmäiset 10 riviä)"):
                 st.dataframe(df.head(10))
+                
+                # Näytä sarakkeiden tietotyypit
+                st.subheader("Sarakkeiden tietotyypit:")
+                for col in df.columns:
+                    st.write(f"- **{col}**: {df[col].dtype}")
             
             # Käsittele data
             processed_df = process_data(df)
             
             if processed_df is not None:
+                st.success(f"✅ Data käsitelty onnistuneesti! {len(processed_df)} validia riviä.")
+                
                 # Laske tilastot
                 hourly_stats = calculate_hourly_stats(processed_df)
                 daily_stats = calculate_daily_stats(processed_df)
@@ -263,8 +289,8 @@ def main():
                 day_shift_data = processed_df[(processed_df['Hour'] >= 7) & (processed_df['Hour'] < 23)]
                 night_shift_data = processed_df[(processed_df['Hour'] >= 23) | (processed_df['Hour'] < 7)]
                 
-                day_avg = day_shift_data['incidents_per_worker'].mean()
-                night_avg = night_shift_data['incidents_per_worker'].mean()
+                day_avg = day_shift_data['incidents_per_worker'].mean() if len(day_shift_data) > 0 else 0
+                night_avg = night_shift_data['incidents_per_worker'].mean() if len(night_shift_data) > 0 else 0
                 
                 # Tulosten näyttäminen
                 st.header("🎯 Tuottavuustavoitteiden tulokset")
@@ -308,49 +334,55 @@ def main():
                 
                 with tab1:
                     st.subheader("Yhdistetty analyysi")
-                    fig_combined = create_combined_chart(hourly_stats)
-                    st.plotly_chart(fig_combined, use_container_width=True)
+                    if len(hourly_stats) > 0:
+                        fig_combined = create_combined_chart(hourly_stats)
+                        st.plotly_chart(fig_combined, use_container_width=True)
+                    else:
+                        st.warning("Ei dataa kaavion piirtämiseen.")
                 
                 with tab2:
                     st.subheader("Tuntikohtainen analyysi")
                     
-                    # Valitse näkymä
-                    chart_type = st.selectbox(
-                        "Valitse näkymä:",
-                        ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
-                    )
-                    
-                    if chart_type == "Incidentit/työntekijä":
-                        fig = px.line(
-                            hourly_stats, 
-                            x='hour_str', 
-                            y='incidents_per_worker',
-                            title='Incidentit per työntekijä tunnissa',
-                            markers=True
+                    if len(hourly_stats) > 0:
+                        # Valitse näkymä
+                        chart_type = st.selectbox(
+                            "Valitse näkymä:",
+                            ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
                         )
-                        fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
-                                     annotation_text="Päivätyöntekijöiden tavoite (5.1)")
-                        fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
-                                     annotation_text="Yötyöntekijöiden tavoite (4.6)")
-                    
-                    elif chart_type == "Kokonaisincidentit":
-                        fig = px.bar(
-                            hourly_stats, 
-                            x='hour_str', 
-                            y='avg_incidents',
-                            title='Keskimääräiset incidentit tunneittain'
-                        )
-                    
-                    else:  # Työntekijämäärät
-                        fig = px.bar(
-                            hourly_stats, 
-                            x='hour_str', 
-                            y='worker_count',
-                            title='Työntekijämäärät tunneittain'
-                        )
-                    
-                    fig.update_layout(height=500)
-                    st.plotly_chart(fig, use_container_width=True)
+                        
+                        if chart_type == "Incidentit/työntekijä":
+                            fig = px.line(
+                                hourly_stats, 
+                                x='hour_str', 
+                                y='incidents_per_worker',
+                                title='Incidentit per työntekijä tunnissa',
+                                markers=True
+                            )
+                            fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                         annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                            fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                         annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                        
+                        elif chart_type == "Kokonaisincidentit":
+                            fig = px.bar(
+                                hourly_stats, 
+                                x='hour_str', 
+                                y='avg_incidents',
+                                title='Keskimääräiset incidentit tunneittain'
+                            )
+                        
+                        else:  # Työntekijämäärät
+                            fig = px.bar(
+                                hourly_stats, 
+                                x='hour_str', 
+                                y='worker_count',
+                                title='Työntekijämäärät tunneittain'
+                            )
+                        
+                        fig.update_layout(height=500)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("Ei dataa kaavion piirtämiseen.")
                 
                 with tab3:
                     st.subheader("Kuukausinäkymä")
@@ -412,70 +444,76 @@ def main():
                 
                 with tab4:
                     st.subheader("Tuntikohtaiset tilastot")
-                    st.dataframe(
-                        hourly_stats,
-                        column_config={
-                            'hour_str': 'Kelloaika',
-                            'avg_incidents': 'Keskim. incidentit',
-                            'worker_count': 'Työntekijämäärä',
-                            'incidents_per_worker': 'Inc/työnt./h',
-                            'days_count': 'Päivien lukumäärä'
-                        },
-                        use_container_width=True
-                    )
+                    if len(hourly_stats) > 0:
+                        st.dataframe(
+                            hourly_stats,
+                            column_config={
+                                'hour_str': 'Kelloaika',
+                                'avg_incidents': 'Keskim. incidentit',
+                                'worker_count': 'Työntekijämäärä',
+                                'incidents_per_worker': 'Inc/työnt./h',
+                                'days_count': 'Päivien lukumäärä'
+                            },
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning("Ei tilastoja näytettäväksi.")
                 
                 with tab5:
                     st.subheader("💡 Optimointisuositukset")
                     
-                    # Ongelmatunnit päivätyöntekijöille
-                    day_problems = hourly_stats[
-                        (hourly_stats['hour'] >= 7) & 
-                        (hourly_stats['hour'] < 23) & 
-                        (hourly_stats['incidents_per_worker'] < 5.1)
-                    ]
-                    
-                    # Ongelmatunnit yötyöntekijöille  
-                    night_problems = hourly_stats[
-                        ((hourly_stats['hour'] >= 23) | (hourly_stats['hour'] < 7)) & 
-                        (hourly_stats['incidents_per_worker'] < 4.6)
-                    ]
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("### 🌅 Päivätyöntekijät")
-                        if len(day_problems) > 0:
-                            st.error(f"Ongelmia {len(day_problems)} tunnissa:")
-                            for _, row in day_problems.iterrows():
-                                st.write(f"- {row['hour_str']}: {row['incidents_per_worker']} inc/työnt./h")
-                            st.markdown("**Suositus:** Vähennä henkilöstöä ali-tuottavina aikoina tai siirrä tehtäviä.")
+                    if len(hourly_stats) > 0:
+                        # Ongelmatunnit päivätyöntekijöille
+                        day_problems = hourly_stats[
+                            (hourly_stats['hour'] >= 7) & 
+                            (hourly_stats['hour'] < 23) & 
+                            (hourly_stats['incidents_per_worker'] < 5.1)
+                        ]
+                        
+                        # Ongelmatunnit yötyöntekijöille  
+                        night_problems = hourly_stats[
+                            ((hourly_stats['hour'] >= 23) | (hourly_stats['hour'] < 7)) & 
+                            (hourly_stats['incidents_per_worker'] < 4.6)
+                        ]
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("### 🌅 Päivätyöntekijät")
+                            if len(day_problems) > 0:
+                                st.error(f"Ongelmia {len(day_problems)} tunnissa:")
+                                for _, row in day_problems.iterrows():
+                                    st.write(f"- {row['hour_str']}: {row['incidents_per_worker']} inc/työnt./h")
+                                st.markdown("**Suositus:** Vähennä henkilöstöä ali-tuottavina aikoina tai siirrä tehtäviä.")
+                            else:
+                                st.success("✅ Kaikki tunnit täyttävät tavoitteen!")
+                        
+                        with col2:
+                            st.markdown("### 🌙 Yötyöntekijät")
+                            if len(night_problems) > 0:
+                                st.error(f"Ongelmia {len(night_problems)} tunnissa:")
+                                for _, row in night_problems.iterrows():
+                                    st.write(f"- {row['hour_str']}: {row['incidents_per_worker']} inc/työnt./h")
+                                st.markdown("**Suositus:** Lisää henkilöstöä ongelmallisina aikoina.")
+                            else:
+                                st.success("✅ Kaikki tunnit täyttävät tavoitteen!")
+                        
+                        # Kokonaiskuva
+                        st.markdown("### 📊 Kokonaisarvio")
+                        if day_avg >= 5.1 and night_avg >= 4.6:
+                            st.success("🎉 Molemmat tuottavuustavoitteet saavutettu! Jatka samalla strategialla.")
+                        elif day_avg >= 5.1:
+                            st.warning("⚠️ Päivätyöntekijöiden tavoite saavutettu, mutta yötyöntekijät tarvitsevat parannusta.")
+                        elif night_avg >= 4.6:
+                            st.warning("⚠️ Yötyöntekijöiden tavoite saavutettu, mutta päivätyöntekijät tarvitsevat parannusta.")
                         else:
-                            st.success("✅ Kaikki tunnit täyttävät tavoitteen!")
-                    
-                    with col2:
-                        st.markdown("### 🌙 Yötyöntekijät")
-                        if len(night_problems) > 0:
-                            st.error(f"Ongelmia {len(night_problems)} tunnissa:")
-                            for _, row in night_problems.iterrows():
-                                st.write(f"- {row['hour_str']}: {row['incidents_per_worker']} inc/työnt./h")
-                            st.markdown("**Suositus:** Lisää henkilöstöä ongelmallisina aikoina.")
-                        else:
-                            st.success("✅ Kaikki tunnit täyttävät tavoitteen!")
-                    
-                    # Kokonaiskuva
-                    st.markdown("### 📊 Kokonaisarvio")
-                    if day_avg >= 5.1 and night_avg >= 4.6:
-                        st.success("🎉 Molemmat tuottavuustavoitteet saavutettu! Jatka samalla strategialla.")
-                    elif day_avg >= 5.1:
-                        st.warning("⚠️ Päivätyöntekijöiden tavoite saavutettu, mutta yötyöntekijät tarvitsevat parannusta.")
-                    elif night_avg >= 4.6:
-                        st.warning("⚠️ Yötyöntekijöiden tavoite saavutettu, mutta päivätyöntekijät tarvitsevat parannusta.")
+                            st.error("❌ Kumpikaan tuottavuustavoite ei täyty. Tarvitaan merkittäviä toimenpiteitä.")
                     else:
-                        st.error("❌ Kumpikaan tuottavuustavoite ei täyty. Tarvitaan merkittäviä toimenpiteitä.")
+                        st.warning("Ei dataa suositusten tekemiseen.")
         
         except Exception as e:
             st.error(f"Virhe tiedoston käsittelyssä: {str(e)}")
-            st.info("Tarkista että Excel-tiedosto sisältää sarakkeet 'Hour' ja 'Incidents handled by agent'.")
+            st.info("Tarkista että Excel-tiedosto sisältää sarakkeet 'Hour' ja 'Incidents handled by agent' ja että ne sisältävät numeroita.")
     
     else:
         # Ohjeet kun ei tiedostoa ladattu
@@ -486,8 +524,8 @@ def main():
         st.markdown("""
         1. **Lataa Excel-tiedosto** sivupalkista
         2. Tiedoston tulee sisältää vähintään sarakkeet:
-           - `Hour` (0-23)
-           - `Incidents handled by agent` (määrä)
+           - `Hour` (0-23, numeroina)
+           - `Incidents handled by agent` (määrä, numeroina)
            - `Date` (valinnainen, päivämäärille)
         3. **Tarkastele tuloksia** eri välilehdiltä:
            - 📊 Yhdistetty näkymä
@@ -505,6 +543,15 @@ def main():
         - **Optimointisuositukset** resurssien allokointiin
         - **Interaktiiviset visualisoinnit** helposti ymmärrettävässä muodossa
         """)
+
+        # Näytä esimerkki oikeasta datamuodosta
+        st.markdown("### 📝 Esimerkki oikeasta datamuodosta:")
+        example_data = pd.DataFrame({
+            'Date': ['2025-02-01', '2025-02-01', '2025-02-01'],
+            'Hour': [0, 1, 2],
+            'Incidents handled by agent': [9, 14, 16]
+        })
+        st.dataframe(example_data, use_container_width=True)
 
 if __name__ == "__main__":
     main()
