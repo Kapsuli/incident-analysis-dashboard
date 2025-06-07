@@ -1051,6 +1051,47 @@ def main():
                             st.error("❌ Kumpikaan tuottavuustavoite ei täyty. Tarvitaan merkittäviä toimenpiteitä.")
                     else:
                         st.warning("Ei dataa suositusten tekemiseen.")
+                
+                # PowerPoint-raportin lataus
+                st.markdown("---")
+                st.subheader("📄 Lataa PowerPoint-raportti")
+                
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button("🎯 Luo PowerPoint-raportti", type="primary", use_container_width=True):
+                        with st.spinner("Luodaan PowerPoint-raporttia..."):
+                            try:
+                                # Luo PowerPoint
+                                pptx_buffer = create_powerpoint_report(daily_stats, hourly_stats, day_avg, night_avg)
+                                
+                                if pptx_buffer:
+                                    # Tallenna session stateen
+                                    st.session_state['pptx_data'] = pptx_buffer.getvalue()
+                                    st.success("✅ PowerPoint-raportti luotu onnistuneesti!")
+                                else:
+                                    st.error("❌ PowerPoint-raportin luonti epäonnistui.")
+                            except Exception as e:
+                                st.error(f"❌ Virhe: {str(e)}")
+                
+                # Latausnappi jos PowerPoint on luotu
+                if 'pptx_data' in st.session_state:
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        current_date = datetime.now().strftime("%Y%m%d")
+                        filename = f"Hälytysten_Analyysi_{current_date}.pptx"
+                        
+                        st.download_button(
+                            label="💾 Lataa PowerPoint-raportti",
+                            data=st.session_state['pptx_data'],
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            type="secondary",
+                            use_container_width=True
+                        )
+                        
+                        st.info("💡 Vinkki: Klikkaa painiketta ladataksesi raportin tietokoneellesi")
+                
+                st.markdown("---")
         
         except Exception as e:
             st.error(f"Virhe tiedoston käsittelyssä: {str(e)}")
