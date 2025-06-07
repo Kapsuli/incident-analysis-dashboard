@@ -116,7 +116,7 @@ def create_calendar_view(daily_stats):
         for day in week:
             if day == 0:
                 # Tyhjä päivä
-                calendar_html += '<td style="padding: 20px; border: 1px solid #e0e0e0; background-color: #f8f9fa; height: 100px;"></td>'
+                calendar_html += '<td style="padding: 20px; border: 1px solid #e0e0e0; background-color: #f8f9fa; height: 85px;"></td>'
             else:
                 # Etsi päivän data
                 day_data = daily_stats[daily_stats['date_obj'].dt.day == day]
@@ -143,21 +143,21 @@ def create_calendar_view(daily_stats):
                     night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
                     
                     calendar_html += f"""
-                    <td style="padding: 12px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 100px; position: relative; transition: all 0.3s ease;">
-                        <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #333;">{day}</div>
-                        <div style="font-size: 12px; line-height: 1.4;">
-                            <div style="color: {day_text_color}; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
-                            <div style="color: {night_text_color}; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
-                            <div style="color: #666; font-size: 11px; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
+                    <td style="padding: 10px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 85px; position: relative; transition: all 0.3s ease;">
+                        <div style="font-weight: bold; font-size: 18px; margin-bottom: 6px; color: #333;">{day}</div>
+                        <div style="font-size: 11px; line-height: 1.3;">
+                            <div style="color: {day_text_color}; font-weight: bold; margin-bottom: 1px;">P: {row['day_shift_avg']:.2f}</div>
+                            <div style="color: {night_text_color}; font-weight: bold; margin-bottom: 1px;">Y: {row['night_shift_avg']:.2f}</div>
+                            <div style="color: #666; font-size: 10px; background-color: rgba(255,255,255,0.7); padding: 1px 3px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
                         </div>
                     </td>
                     """
                 else:
                     # Ei dataa tälle päivälle
                     calendar_html += f"""
-                    <td style="padding: 12px; border: 1px solid #dee2e6; background-color: #ffffff; vertical-align: top; height: 100px;">
-                        <div style="font-weight: bold; color: #999; font-size: 18px; margin-bottom: 5px;">{day}</div>
-                        <div style="font-size: 11px; color: #ccc; font-style: italic;">Ei dataa</div>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; background-color: #ffffff; vertical-align: top; height: 85px;">
+                        <div style="font-weight: bold; color: #999; font-size: 16px; margin-bottom: 4px;">{day}</div>
+                        <div style="font-size: 10px; color: #ccc; font-style: italic;">Ei dataa</div>
                     </td>
                     """
         calendar_html += '</tr>'
@@ -630,9 +630,9 @@ def main():
                         try:
                             calendar_html = create_calendar_view(daily_stats)
                             if calendar_html:
-                                # Käytä components.html korkeammalla height-arvolla
+                                # Käytä korkeampaa height-arvoa jotta koko kalenteri mahtuu
                                 import streamlit.components.v1 as components
-                                components.html(calendar_html, height=700, scrolling=False)
+                                components.html(calendar_html, height=900, scrolling=True)
                             else:
                                 st.warning("Kalenterin luonti epäonnistui.")
                         except Exception as e:
