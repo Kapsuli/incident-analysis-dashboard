@@ -1,4 +1,34 @@
-import streamlit as st
+if len(day_data) > 0:
+                    row = day_data.iloc[0]
+                    
+                    # Määritä väri tavoitteiden perusteella
+                    if row['day_target_met'] and row['night_target_met']:
+                        bg_color = "#d4edda"  # Vihreä - molemmat tavoitteet täytetty
+                        border_color = "#28a745"
+                        border_width = "3px"
+                    elif row['day_target_met'] or row['night_target_met']:
+                        bg_color = "#fff3cd"  # Keltainen - yksi tavoite täytetty
+                        border_color = "#ffc107"
+                        border_width = "2px"
+                    else:
+                        bg_color = "#f8d7da"  # Punainen - kumpikaan tavoite ei täytetty
+                        border_color = "#dc3545"
+                        border_width = "2px"
+                    
+                    # Määritä P: ja Y: tekstien värit tavoitteiden mukaan
+                    day_text_color = "#28a745" if row['day_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
+                    night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
+                    
+                    calendar_html += f"""
+                    <td style="padding: 12px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 100px; position: relative; transition: all 0.3s ease;">
+                        <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #333;">{day}</div>
+                        <div style="font-size: 12px; line-height: 1.4;">
+                            <div style="color: {day_text_color}; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
+                            <div style="color: {night_text_color}; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
+                            <div style="color: #666; font-size: 11px; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
+                        </div>
+                    </td>
+                    """import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
