@@ -6,16 +6,6 @@ from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import calendar
-import locale
-
-# Aseta suomenkielinen lokalisaatio
-try:
-    locale.setlocale(locale.LC_TIME, 'fi_FI.UTF-8')
-except:
-    try:
-        locale.setlocale(locale.LC_TIME, 'Finnish_Finland.1252')  # Windows
-    except:
-        pass  # Käytä oletusta jos ei onnistu
 
 # Sivun konfiguraatio
 st.set_page_config(
@@ -136,24 +126,15 @@ def create_calendar_view(daily_stats):
                     if row['day_target_met'] and row['night_target_met']:
                         bg_color = "#d4edda"  # Vihreä - molemmat tavoitteet täytetty
                         border_color = "#28a745"
-                        status_text = "Molemmat tavoitteet täytetty"
                     elif row['day_target_met'] or row['night_target_met']:
                         bg_color = "#fff3cd"  # Keltainen - yksi tavoite täytetty
                         border_color = "#ffc107"
-                        status_text = "Yksi tavoite täytetty"
                     else:
                         bg_color = "#f8d7da"  # Punainen - kumpikaan tavoite ei täytetty
                         border_color = "#dc3545"
-                        status_text = "Kumpikaan tavoite ei täytetty"
-                    
-                    # Lisää valittu päivä -efekti (voidaan laajentaa myöhemmin)
-                    if day == first_date.day:
-                        border_style = f"3px solid {border_color}"
-                    else:
-                        border_style = f"1px solid {border_color}"
                     
                     html += f"""
-                    <td style="padding: 8px; border: {border_style}; background-color: {bg_color}; vertical-align: top; position: relative;">
+                    <td style="padding: 8px; border: 1px solid {border_color}; background-color: {bg_color}; vertical-align: top;">
                         <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">{day}</div>
                         <div style="font-size: 11px; line-height: 1.2;">
                             <div style="color: #2c5aa0; font-weight: bold;">P: {row['day_shift_avg']:.2f}</div>
@@ -235,15 +216,11 @@ def process_data(df):
         # Käsittele päivämäärät
         if 'Date' in df.columns:
             try:
-                # Kokeile eri päivämäärämuotoja
                 if df_clean['Date'].dtype in ['int64', 'float64']:
-                    # Excel serial date
                     df_clean['date'] = pd.to_datetime('1900-01-01') + pd.to_timedelta(df_clean['Date'] - 2, unit='D')
                 else:
-                    # Tavallinen päivämäärämerkkijono
                     df_clean['date'] = pd.to_datetime(df_clean['Date'], errors='coerce')
                 
-                # Jos päivämäärien muunto epäonnistui, käytä nykyistä päivää
                 if df_clean['date'].isna().all():
                     df_clean['date'] = datetime.now().date()
                     df_clean['date_str'] = df_clean['date'].astype(str)
@@ -253,7 +230,6 @@ def process_data(df):
                     df_clean['date_str'] = df_clean['date'].dt.strftime('%Y-%m-%d')
                     df_clean['day_name'] = df_clean['date'].apply(get_finnish_weekday)
                     df_clean['day'] = df_clean['date'].dt.day
-                    
             except Exception as e:
                 st.warning(f"Päivämäärien käsittely epäonnistui: {str(e)}. Käytetään oletuspäivämääriä.")
                 df_clean['date'] = datetime.now().date()
@@ -261,7 +237,6 @@ def process_data(df):
                 df_clean['day_name'] = 'Tuntematon'
                 df_clean['day'] = 1
         else:
-            # Jos ei päivämääriä, luo dummy-päivämäärät
             df_clean['date'] = datetime.now().date()
             df_clean['date_str'] = df_clean['date'].astype(str)
             df_clean['day_name'] = 'Tuntematon'
@@ -498,6 +473,56 @@ def main():
                     else:
                         st.warning("Ei dataa kaavion piirtämiseen.")
                 
+                with tab2:
+                    st.subheader("Tuntikohtainen analyysi")
+                    
+                    if len(hourly_stats) > 0:
+                        # Valitse näkymä
+                        chart_type = st.selectbox(
+                            "Valitse näkymä:",
+                            ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
+                        )
+                        
+                        try:
+                            if chart_type == "Incidentit/työntekijä":
+                                fig = px.line(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='incidents_per_worker',
+                                    title='Incidentit per työntekijä tunnissa',
+                                    markers=True
+                                )
+                                fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                             annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                                fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                             annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                            
+                            elif chart_type == "Kokonaisincidentit":
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='avg_incidents',
+                                    title='Keskimääräiset incidentit tunneittain'
+                                )
+                            
+                            else:  # Työntekijämäärät
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='worker_count',
+                                    title='Työntekijämäärät tunneittain'
+                                )
+                            
+                            fig.update_layout(height=500)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                        except Exception as e:
+                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
+                            st.info("Näytetään data taulukkona:")
+                            st.dataframe(hourly_stats)
+                    else:
+                        st.warning("Ei dataa kaavion piirtämiseen.")
+                
                 with tab3:
                     st.subheader("📅 Kuukausinäkymä")
                     
@@ -689,54 +714,4 @@ def main():
         st.dataframe(example_data, use_container_width=True)
 
 if __name__ == "__main__":
-    main()lukkona:")
-                            st.dataframe(hourly_stats)
-                    else:
-                        st.warning("Ei dataa kaavion piirtämiseen.")
-                
-                with tab2:
-                    st.subheader("Tuntikohtainen analyysi")
-                    
-                    if len(hourly_stats) > 0:
-                        # Valitse näkymä
-                        chart_type = st.selectbox(
-                            "Valitse näkymä:",
-                            ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
-                        )
-                        
-                        try:
-                            if chart_type == "Incidentit/työntekijä":
-                                fig = px.line(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='incidents_per_worker',
-                                    title='Incidentit per työntekijä tunnissa',
-                                    markers=True
-                                )
-                                fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
-                                             annotation_text="Päivätyöntekijöiden tavoite (5.1)")
-                                fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
-                                             annotation_text="Yötyöntekijöiden tavoite (4.6)")
-                            
-                            elif chart_type == "Kokonaisincidentit":
-                                fig = px.bar(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='avg_incidents',
-                                    title='Keskimääräiset incidentit tunneittain'
-                                )
-                            
-                            else:  # Työntekijämäärät
-                                fig = px.bar(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='worker_count',
-                                    title='Työntekijämäärät tunneittain'
-                                )
-                            
-                            fig.update_layout(height=500)
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                        except Exception as e:
-                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
-                            st.info("Näytetään data tau
+    main()
