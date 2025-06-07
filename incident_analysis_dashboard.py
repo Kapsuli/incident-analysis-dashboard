@@ -173,7 +173,7 @@ def create_combined_chart(hourly_df):
     """Luo yhdistetty kaavio"""
     fig = make_subplots(
         rows=1, cols=1,
-        secondary_y=True,
+        specs=[[{"secondary_y": True}]],
         subplot_titles=["Yhdistetty analyysi"]
     )
     
@@ -335,8 +335,13 @@ def main():
                 with tab1:
                     st.subheader("Yhdistetty analyysi")
                     if len(hourly_stats) > 0:
-                        fig_combined = create_combined_chart(hourly_stats)
-                        st.plotly_chart(fig_combined, use_container_width=True)
+                        try:
+                            fig_combined = create_combined_chart(hourly_stats)
+                            st.plotly_chart(fig_combined, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
+                            st.info("Näytetään data taulukkona:")
+                            st.dataframe(hourly_stats)
                     else:
                         st.warning("Ei dataa kaavion piirtämiseen.")
                 
@@ -350,37 +355,43 @@ def main():
                             ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
                         )
                         
-                        if chart_type == "Incidentit/työntekijä":
-                            fig = px.line(
-                                hourly_stats, 
-                                x='hour_str', 
-                                y='incidents_per_worker',
-                                title='Incidentit per työntekijä tunnissa',
-                                markers=True
-                            )
-                            fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
-                                         annotation_text="Päivätyöntekijöiden tavoite (5.1)")
-                            fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
-                                         annotation_text="Yötyöntekijöiden tavoite (4.6)")
-                        
-                        elif chart_type == "Kokonaisincidentit":
-                            fig = px.bar(
-                                hourly_stats, 
-                                x='hour_str', 
-                                y='avg_incidents',
-                                title='Keskimääräiset incidentit tunneittain'
-                            )
-                        
-                        else:  # Työntekijämäärät
-                            fig = px.bar(
-                                hourly_stats, 
-                                x='hour_str', 
-                                y='worker_count',
-                                title='Työntekijämäärät tunneittain'
-                            )
-                        
-                        fig.update_layout(height=500)
-                        st.plotly_chart(fig, use_container_width=True)
+                        try:
+                            if chart_type == "Incidentit/työntekijä":
+                                fig = px.line(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='incidents_per_worker',
+                                    title='Incidentit per työntekijä tunnissa',
+                                    markers=True
+                                )
+                                fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                             annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                                fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                             annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                            
+                            elif chart_type == "Kokonaisincidentit":
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='avg_incidents',
+                                    title='Keskimääräiset incidentit tunneittain'
+                                )
+                            
+                            else:  # Työntekijämäärät
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='worker_count',
+                                    title='Työntekijämäärät tunneittain'
+                                )
+                            
+                            fig.update_layout(height=500)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                        except Exception as e:
+                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
+                            st.info("Näytetään data taulukkona:")
+                            st.dataframe(hourly_stats)
                     else:
                         st.warning("Ei dataa kaavion piirtämiseen.")
                 
@@ -407,16 +418,21 @@ def main():
                             st.metric("Rauhallisinta", f"{min_day['day']} ({min_day['day_name']})", f"{min_day['total_incidents']} inc")
                         
                         # Päivittäinen kehitys
-                        fig_daily = px.line(
-                            daily_stats, 
-                            x='date', 
-                            y=['day_shift_avg', 'night_shift_avg'],
-                            title='Päivittäinen kehitys',
-                            labels={'value': 'Inc/työnt./h', 'variable': 'Vuoro'}
-                        )
-                        fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red")
-                        fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue")
-                        st.plotly_chart(fig_daily, use_container_width=True)
+                        try:
+                            fig_daily = px.line(
+                                daily_stats, 
+                                x='date', 
+                                y=['day_shift_avg', 'night_shift_avg'],
+                                title='Päivittäinen kehitys',
+                                labels={'value': 'Inc/työnt./h', 'variable': 'Vuoro'}
+                            )
+                            fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red")
+                            fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue")
+                            st.plotly_chart(fig_daily, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Virhe päivittäisen kehityksen kaavion luonnissa: {str(e)}")
+                            st.info("Näytetään data taulukkona:")
+                            st.dataframe(daily_stats[['date', 'day_shift_avg', 'night_shift_avg']])
                         
                         # Päivittäinen taulukko
                         st.subheader("Päivittäiset tulokset")
