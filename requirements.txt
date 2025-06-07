@@ -3,3 +3,4 @@ pandas
 plotly
 openpyxl
 numpy
+python-pptx==0.6.21
