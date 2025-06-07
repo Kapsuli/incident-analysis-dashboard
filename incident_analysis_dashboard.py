@@ -187,24 +187,6 @@ def create_calendar_view(daily_stats):
     """
     
     return html
-    """Laske työntekijämäärä tunnin perusteella"""
-    workers = 0
-    
-    # Yövuoro 19:15-07:15 (2 henkilöä)
-    if hour >= 19 or hour < 7:
-        workers += 2
-    
-    # Aamuvuoro 07:00-17:00 (3 henkilöä)
-    if hour >= 7 and hour < 17:
-        workers += 3
-    
-    # Iltavuorot (portaittain)
-    if hour >= 9 and hour < 19: workers += 1  # 09:15-19:15
-    if hour >= 10 and hour < 20: workers += 1  # 10:00-20:00
-    if hour >= 11 and hour < 21: workers += 1  # 11:00-21:00
-    if hour >= 13 and hour < 23: workers += 1  # 13:00-23:00
-    
-    return workers
 
 @st.cache_data
 def process_data(df):
@@ -250,7 +232,7 @@ def process_data(df):
         df_clean['workers'] = df_clean['Hour'].apply(get_worker_count)
         df_clean['incidents_per_worker'] = df_clean['Incidents handled by agent'] / df_clean['workers']
         
-                # Käsittele päivämäärät
+        # Käsittele päivämäärät
         if 'Date' in df.columns:
             try:
                 # Kokeile eri päivämäärämuotoja
@@ -516,56 +498,6 @@ def main():
                     else:
                         st.warning("Ei dataa kaavion piirtämiseen.")
                 
-                with tab2:
-                    st.subheader("Tuntikohtainen analyysi")
-                    
-                    if len(hourly_stats) > 0:
-                        # Valitse näkymä
-                        chart_type = st.selectbox(
-                            "Valitse näkymä:",
-                            ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
-                        )
-                        
-                        try:
-                            if chart_type == "Incidentit/työntekijä":
-                                fig = px.line(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='incidents_per_worker',
-                                    title='Incidentit per työntekijä tunnissa',
-                                    markers=True
-                                )
-                                fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
-                                             annotation_text="Päivätyöntekijöiden tavoite (5.1)")
-                                fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
-                                             annotation_text="Yötyöntekijöiden tavoite (4.6)")
-                            
-                            elif chart_type == "Kokonaisincidentit":
-                                fig = px.bar(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='avg_incidents',
-                                    title='Keskimääräiset incidentit tunneittain'
-                                )
-                            
-                            else:  # Työntekijämäärät
-                                fig = px.bar(
-                                    hourly_stats, 
-                                    x='hour_str', 
-                                    y='worker_count',
-                                    title='Työntekijämäärät tunneittain'
-                                )
-                            
-                            fig.update_layout(height=500)
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                        except Exception as e:
-                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
-                            st.info("Näytetään data taulukkona:")
-                            st.dataframe(hourly_stats)
-                    else:
-                        st.warning("Ei dataa kaavion piirtämiseen.")
-                
                 with tab3:
                     st.subheader("📅 Kuukausinäkymä")
                     
@@ -757,4 +689,54 @@ def main():
         st.dataframe(example_data, use_container_width=True)
 
 if __name__ == "__main__":
-    main()
+    main()lukkona:")
+                            st.dataframe(hourly_stats)
+                    else:
+                        st.warning("Ei dataa kaavion piirtämiseen.")
+                
+                with tab2:
+                    st.subheader("Tuntikohtainen analyysi")
+                    
+                    if len(hourly_stats) > 0:
+                        # Valitse näkymä
+                        chart_type = st.selectbox(
+                            "Valitse näkymä:",
+                            ["Incidentit/työntekijä", "Kokonaisincidentit", "Työntekijämäärät"]
+                        )
+                        
+                        try:
+                            if chart_type == "Incidentit/työntekijä":
+                                fig = px.line(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='incidents_per_worker',
+                                    title='Incidentit per työntekijä tunnissa',
+                                    markers=True
+                                )
+                                fig.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                             annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                                fig.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                             annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                            
+                            elif chart_type == "Kokonaisincidentit":
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='avg_incidents',
+                                    title='Keskimääräiset incidentit tunneittain'
+                                )
+                            
+                            else:  # Työntekijämäärät
+                                fig = px.bar(
+                                    hourly_stats, 
+                                    x='hour_str', 
+                                    y='worker_count',
+                                    title='Työntekijämäärät tunneittain'
+                                )
+                            
+                            fig.update_layout(height=500)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                        except Exception as e:
+                            st.error(f"Virhe kaavion luonnissa: {str(e)}")
+                            st.info("Näytetään data tau
