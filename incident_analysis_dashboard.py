@@ -82,27 +82,29 @@ def create_calendar_view(daily_stats):
     
     # Luo HTML-taulukko
     month_name = get_finnish_month_name(month)
-    html = f"""
-    <div style="margin: 20px 0;">
-        <h3 style="text-align: center; margin-bottom: 20px; color: #1f77b4;">
-            {month_name} {year}
+    
+    # Aloita kalenteri-HTML
+    calendar_html = f"""
+    <div style="margin: 20px 0; font-family: Arial, sans-serif;">
+        <h3 style="text-align: center; margin-bottom: 20px; color: #1f77b4; font-size: 24px;">
+            📅 {month_name} {year}
         </h3>
-        <div style="text-align: right; margin-bottom: 10px; font-size: 14px;">
+        <div style="text-align: center; margin-bottom: 15px; font-size: 14px;">
             <span style="color: #666;">Rauhallisin: </span>
-            <span style="background-color: #d4edda; padding: 2px 8px; border-radius: 3px; font-weight: bold;">
-                {daily_stats.loc[daily_stats['total_incidents'].idxmin(), 'day']:.0f} ({daily_stats['total_incidents'].min():.0f} inc)
+            <span style="background-color: #d4edda; padding: 4px 12px; border-radius: 5px; font-weight: bold;">
+                {daily_stats.loc[daily_stats['total_incidents'].idxmin(), 'day']:.0f}. päivä ({daily_stats['total_incidents'].min():.0f} inc)
             </span>
         </div>
-        <table style="width: 100%; border-collapse: collapse; margin: 0 auto; max-width: 900px;">
+        <table style="width: 100%; border-collapse: collapse; margin: 0 auto; max-width: 1000px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <thead>
-                <tr style="background-color: #f8f9fa;">
+                <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
     """
     
     # Viikonpäivien otsikot
     for day_name in FINNISH_WEEKDAYS:
-        html += f'<th style="padding: 10px; text-align: center; border: 1px solid #dee2e6; font-weight: bold; color: #495057;">{day_name}</th>'
+        calendar_html += f'<th style="padding: 15px 10px; text-align: center; font-weight: bold; font-size: 16px;">{day_name}</th>'
     
-    html += """
+    calendar_html += """
                 </tr>
             </thead>
             <tbody>
@@ -110,11 +112,11 @@ def create_calendar_view(daily_stats):
     
     # Kalenterin rivit
     for week in cal:
-        html += '<tr>'
+        calendar_html += '<tr>'
         for day in week:
             if day == 0:
                 # Tyhjä päivä
-                html += '<td style="padding: 15px; border: 1px solid #dee2e6; background-color: #f8f9fa;"></td>'
+                calendar_html += '<td style="padding: 20px; border: 1px solid #e0e0e0; background-color: #f8f9fa; height: 100px;"></td>'
             else:
                 # Etsi päivän data
                 day_data = daily_stats[daily_stats['date_obj'].dt.day == day]
@@ -126,48 +128,69 @@ def create_calendar_view(daily_stats):
                     if row['day_target_met'] and row['night_target_met']:
                         bg_color = "#d4edda"  # Vihreä - molemmat tavoitteet täytetty
                         border_color = "#28a745"
+                        border_width = "3px"
                     elif row['day_target_met'] or row['night_target_met']:
                         bg_color = "#fff3cd"  # Keltainen - yksi tavoite täytetty
                         border_color = "#ffc107"
+                        border_width = "2px"
                     else:
                         bg_color = "#f8d7da"  # Punainen - kumpikaan tavoite ei täytetty
                         border_color = "#dc3545"
+                        border_width = "2px"
                     
-                    html += f"""
-                    <td style="padding: 8px; border: 1px solid {border_color}; background-color: {bg_color}; vertical-align: top;">
-                        <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">{day}</div>
-                        <div style="font-size: 11px; line-height: 1.2;">
-                            <div style="color: #2c5aa0; font-weight: bold;">P: {row['day_shift_avg']:.2f}</div>
-                            <div style="color: #6f42c1; font-weight: bold;">Y: {row['night_shift_avg']:.2f}</div>
-                            <div style="color: #666; margin-top: 2px;">{row['total_incidents']:.0f} inc</div>
+                    calendar_html += f"""
+                    <td style="padding: 12px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 100px; position: relative; transition: all 0.3s ease;">
+                        <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #333;">{day}</div>
+                        <div style="font-size: 12px; line-height: 1.4;">
+                            <div style="color: #2c5aa0; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
+                            <div style="color: #6f42c1; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
+                            <div style="color: #666; font-size: 11px; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
                         </div>
                     </td>
                     """
                 else:
                     # Ei dataa tälle päivälle
-                    html += f"""
-                    <td style="padding: 15px; border: 1px solid #dee2e6; background-color: #ffffff; vertical-align: top;">
-                        <div style="font-weight: bold; color: #999;">{day}</div>
-                        <div style="font-size: 11px; color: #ccc; margin-top: 5px;">Ei dataa</div>
+                    calendar_html += f"""
+                    <td style="padding: 12px; border: 1px solid #dee2e6; background-color: #ffffff; vertical-align: top; height: 100px;">
+                        <div style="font-weight: bold; color: #999; font-size: 18px; margin-bottom: 5px;">{day}</div>
+                        <div style="font-size: 11px; color: #ccc; font-style: italic;">Ei dataa</div>
                     </td>
                     """
-        html += '</tr>'
+        calendar_html += '</tr>'
     
-    html += """
+    calendar_html += """
             </tbody>
         </table>
-        <div style="margin-top: 15px; font-size: 12px; color: #666;">
-            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #d4edda; border: 1px solid #28a745; margin-right: 5px;"></span>Molemmat tavoitteet täytetty</span>
-                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span>Yksi tavoite täytetty</span>
-                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #f8d7da; border: 1px solid #dc3545; margin-right: 5px;"></span>Kumpikaan tavoite ei täytetty</span>
-                <span><span style="display: inline-block; width: 12px; height: 12px; background-color: #ffffff; border: 1px solid #dee2e6; margin-right: 5px;"></span>Ei dataa</span>
+        <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+            <div style="text-align: center; font-size: 13px; color: #666; margin-bottom: 10px;">
+                <strong>Selite:</strong>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 25px; flex-wrap: wrap;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 16px; height: 16px; background-color: #d4edda; border: 2px solid #28a745; border-radius: 3px;"></span>
+                    <span style="font-size: 13px; font-weight: 500;">Molemmat tavoitteet täytetty</span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 16px; height: 16px; background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 3px;"></span>
+                    <span style="font-size: 13px; font-weight: 500;">Yksi tavoite täytetty</span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 16px; height: 16px; background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 3px;"></span>
+                    <span style="font-size: 13px; font-weight: 500;">Kumpikaan tavoite ei täytetty</span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 16px; height: 16px; background-color: #ffffff; border: 2px solid #dee2e6; border-radius: 3px;"></span>
+                    <span style="font-size: 13px; font-weight: 500;">Ei dataa</span>
+                </span>
+            </div>
+            <div style="text-align: center; margin-top: 12px; font-size: 12px; color: #888;">
+                <strong>P:</strong> Päivätyöntekijät (tavoite ≥5.1) | <strong>Y:</strong> Yötyöntekijät (tavoite ≥4.6) | <strong>inc:</strong> Incidentit yhteensä
             </div>
         </div>
     </div>
     """
     
-    return html
+    return calendar_html
 
 @st.cache_data
 def process_data(df):
@@ -526,11 +549,23 @@ def main():
                 with tab3:
                     st.subheader("📅 Kuukausinäkymä")
                     
-                    if len(daily_stats) > 1:
+                    if len(daily_stats) >= 1:  # Muutettu > 1 -> >= 1
                         # Luo kalenterinäkymä
-                        calendar_html = create_calendar_view(daily_stats)
-                        if calendar_html:
-                            st.markdown(calendar_html, unsafe_allow_html=True)
+                        try:
+                            calendar_html = create_calendar_view(daily_stats)
+                            if calendar_html:
+                                # Käytä st.components.v1.html jos mahdollista, muuten st.markdown
+                                try:
+                                    import streamlit.components.v1 as components
+                                    components.html(calendar_html, height=600, scrolling=True)
+                                except:
+                                    st.markdown(calendar_html, unsafe_allow_html=True)
+                            else:
+                                st.warning("Kalenterin luonti epäonnistui.")
+                        except Exception as e:
+                            st.error(f"Virhe kalenterin luonnissa: {str(e)}")
+                            st.info("Näytetään data taulukkona:")
+                            st.dataframe(daily_stats)
                         
                         # Kuukausistatistiikat
                         st.subheader("📊 Kuukauden yhteenveto")
