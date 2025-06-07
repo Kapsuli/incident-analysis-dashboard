@@ -1,34 +1,4 @@
-if len(day_data) > 0:
-                    row = day_data.iloc[0]
-                    
-                    # Määritä väri tavoitteiden perusteella
-                    if row['day_target_met'] and row['night_target_met']:
-                        bg_color = "#d4edda"  # Vihreä - molemmat tavoitteet täytetty
-                        border_color = "#28a745"
-                        border_width = "3px"
-                    elif row['day_target_met'] or row['night_target_met']:
-                        bg_color = "#fff3cd"  # Keltainen - yksi tavoite täytetty
-                        border_color = "#ffc107"
-                        border_width = "2px"
-                    else:
-                        bg_color = "#f8d7da"  # Punainen - kumpikaan tavoite ei täytetty
-                        border_color = "#dc3545"
-                        border_width = "2px"
-                    
-                    # Määritä P: ja Y: tekstien värit tavoitteiden mukaan
-                    day_text_color = "#28a745" if row['day_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
-                    night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
-                    
-                    calendar_html += f"""
-                    <td style="padding: 12px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 100px; position: relative; transition: all 0.3s ease;">
-                        <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #333;">{day}</div>
-                        <div style="font-size: 12px; line-height: 1.4;">
-                            <div style="color: {day_text_color}; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
-                            <div style="color: {night_text_color}; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
-                            <div style="color: #666; font-size: 11px; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
-                        </div>
-                    </td>
-                    """import streamlit as st
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -168,12 +138,16 @@ def create_calendar_view(daily_stats):
                         border_color = "#dc3545"
                         border_width = "2px"
                     
+                    # Määritä P: ja Y: tekstien värit tavoitteiden mukaan
+                    day_text_color = "#28a745" if row['day_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
+                    night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
+                    
                     calendar_html += f"""
                     <td style="padding: 12px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 100px; position: relative; transition: all 0.3s ease;">
                         <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #333;">{day}</div>
                         <div style="font-size: 12px; line-height: 1.4;">
-                            <div style="color: #2c5aa0; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
-                            <div style="color: #6f42c1; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
+                            <div style="color: {day_text_color}; font-weight: bold; margin-bottom: 2px;">P: {row['day_shift_avg']:.2f}</div>
+                            <div style="color: {night_text_color}; font-weight: bold; margin-bottom: 2px;">Y: {row['night_shift_avg']:.2f}</div>
                             <div style="color: #666; font-size: 11px; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; display: inline-block;">{row['total_incidents']:.0f} inc</div>
                         </div>
                     </td>
@@ -214,7 +188,7 @@ def create_calendar_view(daily_stats):
                 </span>
             </div>
             <div style="text-align: center; margin-top: 12px; font-size: 12px; color: #888;">
-                <strong>P:</strong> Päivätyöntekijät (tavoite ≥5.1) | <strong>Y:</strong> Yötyöntekijät (tavoite ≥4.6) | <strong>inc:</strong> Incidentit yhteensä
+                <strong style="color: #28a745;">P:</strong> Päivätyöntekijät (tavoite ≥5.1) | <strong style="color: #6f42c1;">Y:</strong> Yötyöntekijät (tavoite ≥4.6) | <strong>inc:</strong> Incidentit yhteensä
             </div>
         </div>
     </div>
@@ -579,17 +553,12 @@ def main():
                 with tab3:
                     st.subheader("📅 Kuukausinäkymä")
                     
-                    if len(daily_stats) >= 1:  # Muutettu > 1 -> >= 1
+                    if len(daily_stats) >= 1:
                         # Luo kalenterinäkymä
                         try:
                             calendar_html = create_calendar_view(daily_stats)
                             if calendar_html:
-                                # Käytä st.components.v1.html jos mahdollista, muuten st.markdown
-                                try:
-                                    import streamlit.components.v1 as components
-                                    components.html(calendar_html, height=600, scrolling=True)
-                                except:
-                                    st.markdown(calendar_html, unsafe_allow_html=True)
+                                st.markdown(calendar_html, unsafe_allow_html=True)
                             else:
                                 st.warning("Kalenterin luonti epäonnistui.")
                         except Exception as e:
@@ -665,7 +634,7 @@ def main():
                             use_container_width=True
                         )
                     else:
-                        st.info("Kuukausinäkymä vaatii useamman päivän dataa.")
+                        st.info("Kuukausinäkymä vaatii vähintään yhden päivän dataa.")
                 
                 with tab4:
                     st.subheader("Tuntikohtaiset tilastot")
