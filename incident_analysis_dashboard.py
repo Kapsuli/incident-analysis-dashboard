@@ -6,6 +6,13 @@ from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import calendar
+import io
+import base64
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
+import plotly.io as pio
 
 # Sivun konfiguraatio
 st.set_page_config(
@@ -395,6 +402,385 @@ def create_combined_chart(hourly_df):
     
     return fig
 
+def save_plotly_as_image(fig, filename, width=1200, height=600):
+    """Tallenna Plotly-kuvaaja PNG-muodossa"""
+    try:
+        img_bytes = pio.to_image(fig, format="png", width=width, height=height, scale=2)
+        return img_bytes
+    except Exception as e:
+        st.error(f"Virhe kuvaajan tallentamisessa: {str(e)}")
+        return None
+
+def create_powerpoint_presentation(selected_slides, data_dict):
+    """Luo PowerPoint-esitys valituista dioista"""
+    try:
+        # Luo uusi esitys
+        prs = Presentation()
+        
+        # Aseta oletuslayout
+        slide_layout = prs.slide_layouts[1]  # Title and Content layout
+        
+        for slide_type in selected_slides:
+            if slide_type == "Yhteenveto":
+                create_summary_slide(prs, data_dict)
+            elif slide_type == "Tuottavuustavoitteet":
+                create_targets_slide(prs, data_dict)
+            elif slide_type == "Tuntikohtainen analyysi":
+                create_hourly_analysis_slide(prs, data_dict)
+            elif slide_type == "Kuukausinäkymä":
+                create_monthly_view_slide(prs, data_dict)
+            elif slide_type == "Suositukset":
+                create_recommendations_slide(prs, data_dict)
+            elif slide_type == "Yhdistetty kaavio":
+                create_combined_chart_slide(prs, data_dict)
+        
+        return prs
+    
+    except Exception as e:
+        st.error(f"Virhe PowerPoint-esityksen luonnissa: {str(e)}")
+        return None
+
+def create_summary_slide(prs, data_dict):
+    """Luo yhteenveto-dia"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    # Otsikko
+    title = slide.shapes.title
+    title.text = "📊 Hälytysten Analyysi - Yhteenveto"
+    
+    # Sisältö
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    # Lisää yhteenveto-tiedot
+    processed_df = data_dict.get('processed_df')
+    daily_stats = data_dict.get('daily_stats')
+    day_avg = data_dict.get('day_avg', 0)
+    night_avg = data_dict.get('night_avg', 0)
+    
+    if processed_df is not None and len(processed_df) > 0:
+        total_incidents = processed_df['Incidents handled by agent'].sum()
+        analysis_period = f"{processed_df['date_str'].min()} - {processed_df['date_str'].max()}"
+        total_days = len(daily_stats) if daily_stats is not None else 1
+        
+        p = tf.paragraphs[0]
+        p.text = f"Analysoitu ajanjakso: {analysis_period}"
+        p.font.size = Pt(16)
+        p.font.bold = True
+        
+        # Lisää tilastoja
+        stats_text = f"""
+• Yhteensä incidenttejä: {total_incidents:.0f}
+• Analysoitu päiviä: {total_days}
+• Keskimäärin incidenttejä/päivä: {total_incidents/total_days:.1f}
+
+Tuottavuustavoitteiden tulokset:
+• Päivätyöntekijät (07-23): {day_avg:.2f} inc/työnt./h
+  - Tavoite: ≥5.1 inc/työnt./h
+  - Tulos: {'✅ SAAVUTETTU' if day_avg >= 5.1 else '❌ EI SAAVUTETTU'}
+  
+• Yötyöntekijät (23-07): {night_avg:.2f} inc/työnt./h
+  - Tavoite: ≥4.6 inc/työnt./h
+  - Tulos: {'✅ SAAVUTETTU' if night_avg >= 4.6 else '❌ EI SAAVUTETTU'}
+"""
+        
+        for line in stats_text.strip().split('\n'):
+            if line.strip():
+                p = tf.add_paragraph()
+                p.text = line
+                p.font.size = Pt(14)
+                if '✅' in line or '❌' in line:
+                    p.font.bold = True
+
+def create_targets_slide(prs, data_dict):
+    """Luo tuottavuustavoitteet-dia"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    title = slide.shapes.title
+    title.text = "🎯 Tuottavuustavoitteiden Analyysi"
+    
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    day_avg = data_dict.get('day_avg', 0)
+    night_avg = data_dict.get('night_avg', 0)
+    
+    # Päivätyöntekijät
+    p = tf.paragraphs[0]
+    p.text = "🌅 PÄIVÄTYÖNTEKIJÄT (07:00-23:00)"
+    p.font.size = Pt(18)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(0, 100, 0) if day_avg >= 5.1 else RGBColor(200, 0, 0)
+    
+    p = tf.add_paragraph()
+    p.text = f"Keskiarvo: {day_avg:.2f} inc/työnt./h"
+    p.font.size = Pt(16)
+    
+    p = tf.add_paragraph()
+    p.text = f"Tavoite: ≥5.1 inc/työnt./h"
+    p.font.size = Pt(14)
+    
+    p = tf.add_paragraph()
+    p.text = f"Ero tavoitteeseen: {day_avg - 5.1:+.2f}"
+    p.font.size = Pt(14)
+    p.font.color.rgb = RGBColor(0, 100, 0) if day_avg >= 5.1 else RGBColor(200, 0, 0)
+    
+    # Tyhjä rivi
+    tf.add_paragraph()
+    
+    # Yötyöntekijät
+    p = tf.add_paragraph()
+    p.text = "🌙 YÖTYÖNTEKIJÄT (23:00-07:00)"
+    p.font.size = Pt(18)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(0, 100, 0) if night_avg >= 4.6 else RGBColor(200, 0, 0)
+    
+    p = tf.add_paragraph()
+    p.text = f"Keskiarvo: {night_avg:.2f} inc/työnt./h"
+    p.font.size = Pt(16)
+    
+    p = tf.add_paragraph()
+    p.text = f"Tavoite: ≥4.6 inc/työnt./h"
+    p.font.size = Pt(14)
+    
+    p = tf.add_paragraph()
+    p.text = f"Ero tavoitteeseen: {night_avg - 4.6:+.2f}"
+    p.font.size = Pt(14)
+    p.font.color.rgb = RGBColor(0, 100, 0) if night_avg >= 4.6 else RGBColor(200, 0, 0)
+
+def create_hourly_analysis_slide(prs, data_dict):
+    """Luo tuntikohtainen analyysi -dia"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    title = slide.shapes.title
+    title.text = "📈 Tuntikohtainen Analyysi"
+    
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    hourly_stats = data_dict.get('hourly_stats')
+    
+    if hourly_stats is not None and len(hourly_stats) > 0:
+        # Etsi huipputunnit
+        max_incidents_hour = hourly_stats.loc[hourly_stats['avg_incidents'].idxmax()]
+        min_incidents_hour = hourly_stats.loc[hourly_stats['avg_incidents'].idxmin()]
+        max_efficiency_hour = hourly_stats.loc[hourly_stats['incidents_per_worker'].idxmax()]
+        min_efficiency_hour = hourly_stats.loc[hourly_stats['incidents_per_worker'].idxmin()]
+        
+        p = tf.paragraphs[0]
+        p.text = "KESKEISET HAVAINNOT:"
+        p.font.size = Pt(16)
+        p.font.bold = True
+        
+        findings = [
+            f"• Kiireisin tunti: {max_incidents_hour['hour_str']} ({max_incidents_hour['avg_incidents']:.1f} inc)",
+            f"• Rauhallisim tunti: {min_incidents_hour['hour_str']} ({min_incidents_hour['avg_incidents']:.1f} inc)",
+            f"• Tehokkain tunti: {max_efficiency_hour['hour_str']} ({max_efficiency_hour['incidents_per_worker']:.2f} inc/työnt.)",
+            f"• Vähiten tehokas: {min_efficiency_hour['hour_str']} ({min_efficiency_hour['incidents_per_worker']:.2f} inc/työnt.)",
+            "",
+            "VUOROJÄRJESTELY:",
+            "• Yövuoro (19:15-07:15): 2 henkilöä",
+            "• Aamuvuoro (07:00-17:00): 3 henkilöä", 
+            "• Iltavuorot (portaittain): 1-4 henkilöä lisää"
+        ]
+        
+        for finding in findings:
+            if finding.strip():
+                p = tf.add_paragraph()
+                p.text = finding
+                p.font.size = Pt(14)
+                if finding.startswith("VUOROJÄRJESTELY"):
+                    p.font.bold = True
+                    p.font.size = Pt(15)
+
+def create_monthly_view_slide(prs, data_dict):
+    """Luo kuukausinäkymä-dia"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    title = slide.shapes.title
+    title.text = "📅 Kuukausinäkymä"
+    
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    daily_stats = data_dict.get('daily_stats')
+    
+    if daily_stats is not None and len(daily_stats) > 0:
+        # Kuukauden tilastot
+        day_target_met = len(daily_stats[daily_stats['day_target_met']])
+        night_target_met = len(daily_stats[daily_stats['night_target_met']])
+        total_days = len(daily_stats)
+        
+        max_day = daily_stats.loc[daily_stats['total_incidents'].idxmax()]
+        min_day = daily_stats.loc[daily_stats['total_incidents'].idxmin()]
+        
+        p = tf.paragraphs[0]
+        p.text = "KUUKAUDEN YHTEENVETO:"
+        p.font.size = Pt(16)
+        p.font.bold = True
+        
+        stats = [
+            f"• Analysoitu päiviä: {total_days}",
+            f"• Päivätyöntekijöiden tavoite täytetty: {day_target_met}/{total_days} päivää ({day_target_met/total_days*100:.1f}%)",
+            f"• Yötyöntekijöiden tavoite täytetty: {night_target_met}/{total_days} päivää ({night_target_met/total_days*100:.1f}%)",
+            "",
+            f"• Kiireisin päivä: {max_day['day']:.0f}. ({max_day['day_name']}) - {max_day['total_incidents']:.0f} inc",
+            f"• Rauhallisin päivä: {min_day['day']:.0f}. ({min_day['day_name']}) - {min_day['total_incidents']:.0f} inc",
+            "",
+            "PÄIVITTÄINEN KEHITYS:",
+            f"• Päivätyöntekijöiden keskiarvo: {daily_stats['day_shift_avg'].mean():.2f}",
+            f"• Yötyöntekijöiden keskiarvo: {daily_stats['night_shift_avg'].mean():.2f}",
+            f"• Kokonaisincidenttien keskiarvo: {daily_stats['total_incidents'].mean():.1f}/päivä"
+        ]
+        
+        for stat in stats:
+            if stat.strip():
+                p = tf.add_paragraph()
+                p.text = stat
+                p.font.size = Pt(14)
+                if stat.startswith("PÄIVITTÄINEN KEHITYS"):
+                    p.font.bold = True
+                    p.font.size = Pt(15)
+
+def create_recommendations_slide(prs, data_dict):
+    """Luo suositukset-dia"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    title = slide.shapes.title
+    title.text = "💡 Optimointisuositukset"
+    
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    hourly_stats = data_dict.get('hourly_stats')
+    day_avg = data_dict.get('day_avg', 0)
+    night_avg = data_dict.get('night_avg', 0)
+    
+    p = tf.paragraphs[0]
+    p.text = "TOIMENPIDESUOSITUKSET:"
+    p.font.size = Pt(16)
+    p.font.bold = True
+    
+    if hourly_stats is not None and len(hourly_stats) > 0:
+        # Analysoi ongelmatunnit
+        day_problems = hourly_stats[
+            (hourly_stats['hour'] >= 7) & 
+            (hourly_stats['hour'] < 23) & 
+            (hourly_stats['incidents_per_worker'] < 5.1)
+        ]
+        
+        night_problems = hourly_stats[
+            ((hourly_stats['hour'] >= 23) | (hourly_stats['hour'] < 7)) & 
+            (hourly_stats['incidents_per_worker'] < 4.6)
+        ]
+        
+        recommendations = []
+        
+        # Kokonaisarvio
+        if day_avg >= 5.1 and night_avg >= 4.6:
+            recommendations.append("✅ MOLEMMAT TAVOITTEET SAAVUTETTU")
+            recommendations.append("• Jatka nykyisellä strategialla")
+            recommendations.append("• Seuraa trendin kehitystä")
+        else:
+            if day_avg < 5.1:
+                recommendations.append("❌ PÄIVÄTYÖNTEKIJÄT - TOIMENPITEET TARVITAAN")
+                if len(day_problems) > 0:
+                    problem_hours = ", ".join([f"{row['hour_str']}" for _, row in day_problems.iterrows()])
+                    recommendations.append(f"• Ongelmatunnit: {problem_hours}")
+                recommendations.append("• Harkitse henkilöstön lisäämistä ongelmallisina aikoina")
+                recommendations.append("• Analysoi työkuormituksen jakoa")
+            
+            if night_avg < 4.6:
+                recommendations.append("❌ YÖTYÖNTEKIJÄT - TOIMENPITEET TARVITAAN")
+                if len(night_problems) > 0:
+                    problem_hours = ", ".join([f"{row['hour_str']}" for _, row in night_problems.iterrows()])
+                    recommendations.append(f"• Ongelmatunnit: {problem_hours}")
+                recommendations.append("• Harkitse henkilöstön lisäämistä yövuoroon")
+                recommendations.append("• Tarkista yövuoron prosessit")
+        
+        recommendations.extend([
+            "",
+            "JATKUVAT PARANNUSTOIMET:",
+            "• Seuraa tuntikohtaisia trendejä viikoittain",
+            "• Analysoi incidenttityyppien jakautumista",
+            "• Optimoi vuorosuunnittelua datan perusteella",
+            "• Koulutettu henkilöstöä tehokkaampiin työmenetelmiin"
+        ])
+        
+        for rec in recommendations:
+            if rec.strip():
+                p = tf.add_paragraph()
+                p.text = rec
+                p.font.size = Pt(14)
+                if rec.startswith("✅") or rec.startswith("❌"):
+                    p.font.bold = True
+                    p.font.size = Pt(15)
+                elif rec.startswith("JATKUVAT PARANNUSTOIMET"):
+                    p.font.bold = True
+                    p.font.size = Pt(15)
+
+def create_combined_chart_slide(prs, data_dict):
+    """Luo yhdistetty kaavio -dia"""
+    slide_layout = prs.slide_layouts[5]  # Blank layout for chart
+    slide = prs.slides.add_slide(slide_layout)
+    
+    # Lisää otsikko
+    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(9), Inches(1))
+    title_frame = title_box.text_frame
+    title_para = title_frame.paragraphs[0]
+    title_para.text = "📊 Yhdistetty Analyysi - Tuntikohtainen Kuormitus"
+    title_para.font.size = Pt(24)
+    title_para.font.bold = True
+    title_para.alignment = PP_ALIGN.CENTER
+    
+    # Lisää selitysteksti
+    info_box = slide.shapes.add_textbox(Inches(0.5), Inches(6), Inches(9), Inches(1.5))
+    info_frame = info_box.text_frame
+    
+    hourly_stats = data_dict.get('hourly_stats')
+    if hourly_stats is not None and len(hourly_stats) > 0:
+        max_incidents = hourly_stats['avg_incidents'].max()
+        max_hour = hourly_stats.loc[hourly_stats['avg_incidents'].idxmax(), 'hour_str']
+        max_efficiency = hourly_stats['incidents_per_worker'].max()
+        max_eff_hour = hourly_stats.loc[hourly_stats['incidents_per_worker'].idxmax(), 'hour_str']
+        
+        info_text = f"""Kaavio näyttää:
+• Sininen pylväs: Keskimääräiset incidentit tunnissa (maksimi {max_incidents:.1f} klo {max_hour})
+• Punainen viiva: Incidentit per työntekijä (maksimi {max_efficiency:.2f} klo {max_eff_hour})
+• Vihreä viiva: Työntekijämäärä vuoroittain (2-7 henkilöä)
+
+Tavoitteet: Päivätyöntekijät ≥5.1, Yötyöntekijät ≥4.6 inc/työnt./h"""
+        
+        info_para = info_frame.paragraphs[0]
+        info_para.text = info_text
+        info_para.font.size = Pt(14)
+
+def download_powerpoint(prs, filename="incident_analysis.pptx"):
+    """Luo latauslinkki PowerPoint-tiedostolle"""
+    try:
+        # Tallenna muistiin
+        output = io.BytesIO()
+        prs.save(output)
+        output.seek(0)
+        
+        # Luo latauslinkki
+        b64 = base64.b64encode(output.read()).decode()
+        href = f'<a href="data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64}" download="{filename}">💾 Lataa PowerPoint-esitys</a>'
+        return href
+    except Exception as e:
+        st.error(f"Virhe PowerPoint-tiedoston luonnissa: {str(e)}")
+        return None
+
 def main():
     # Otsikko
     st.title("📊 Hälytysten Analyysihallinta")
@@ -409,6 +795,28 @@ def main():
             "Lataa Excel-tiedosto",
             type=['xlsx', 'xls'],
             help="Tiedoston tulee sisältää sarakkeet: 'Hour', 'Incidents handled by agent', ja mahdollisesti 'Date'"
+        )
+        
+        st.markdown("---")
+        
+        # PowerPoint-asetukset
+        st.subheader("📑 PowerPoint-esitys")
+        st.markdown("Valitse diat joita haluat sisällyttää esitykseen:")
+        
+        slide_options = [
+            "Yhteenveto",
+            "Tuottavuustavoitteet", 
+            "Yhdistetty kaavio",
+            "Tuntikohtainen analyysi",
+            "Kuukausinäkymä",
+            "Suositukset"
+        ]
+        
+        selected_slides = st.multiselect(
+            "Valitse diat:",
+            slide_options,
+            default=["Yhteenveto", "Tuottavuustavoitteet", "Suositukset"],
+            help="Valitse ne diat jotka haluat sisällyttää PowerPoint-esitykseen"
         )
         
         st.markdown("---")
@@ -466,6 +874,42 @@ def main():
                 
                 day_avg = day_shift_data['incidents_per_worker'].mean() if len(day_shift_data) > 0 else 0
                 night_avg = night_shift_data['incidents_per_worker'].mean() if len(night_shift_data) > 0 else 0
+                
+                # Luo data_dict PowerPoint-generointia varten
+                data_dict = {
+                    'processed_df': processed_df,
+                    'hourly_stats': hourly_stats,
+                    'daily_stats': daily_stats,
+                    'day_avg': day_avg,
+                    'night_avg': night_avg
+                }
+                
+                # PowerPoint-latausmahdollisuus
+                if selected_slides and len(selected_slides) > 0:
+                    st.markdown("---")
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.markdown("### 📑 PowerPoint-esitys")
+                        st.write(f"Valitut diat ({len(selected_slides)}): {', '.join(selected_slides)}")
+                    
+                    with col2:
+                        if st.button("🔄 Luo PowerPoint", type="primary"):
+                            with st.spinner("Luodaan PowerPoint-esitystä..."):
+                                try:
+                                    ppt = create_powerpoint_presentation(selected_slides, data_dict)
+                                    if ppt:
+                                        download_link = download_powerpoint(ppt, f"incident_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx")
+                                        if download_link:
+                                            st.success("✅ PowerPoint-esitys luotu!")
+                                            st.markdown(download_link, unsafe_allow_html=True)
+                                        else:
+                                            st.error("❌ PowerPoint-latauslinkin luonti epäonnistui")
+                                    else:
+                                        st.error("❌ PowerPoint-esityksen luonti epäonnistui")
+                                except Exception as e:
+                                    st.error(f"❌ Virhe PowerPoint-esityksen luonnissa: {str(e)}")
+                                    st.info("Varmista että python-pptx kirjasto on asennettu: pip install python-pptx")
                 
                 # Tulosten näyttäminen
                 st.header("🎯 Tuottavuustavoitteiden tulokset")
@@ -816,12 +1260,14 @@ def main():
            - `Hour` (0-23, numeroina)
            - `Incidents handled by agent` (määrä, numeroina)
            - `Date` (valinnainen, päivämäärille)
-        3. **Tarkastele tuloksia** eri välilehdiltä:
+        3. **Valitse PowerPoint-diat** sivupalkista
+        4. **Tarkastele tuloksia** eri välilehdiltä:
            - 📊 Yhdistetty näkymä
            - 📈 Tuntikohtainen analyysi  
            - 📅 Kuukausinäkymä
            - 📋 Tilastot
            - 💡 Suositukset
+        5. **Lataa PowerPoint-esitys** valituista dioista
         """)
         
         st.markdown("### 🎯 Mitä työkalu analysoi:")
@@ -831,6 +1277,7 @@ def main():
         - **Päivittäiset suorituskykytrendit** 
         - **Optimointisuositukset** resurssien allokointiin
         - **Interaktiiviset visualisoinnit** helposti ymmärrettävässä muodossa
+        - **PowerPoint-esitykset** räätälöityjen diojen kanssa
         """)
 
         # Näytä esimerkki oikeasta datamuodosta
@@ -841,6 +1288,23 @@ def main():
             'Incidents handled by agent': [9, 14, 16]
         })
         st.dataframe(example_data, use_container_width=True)
+        
+        # PowerPoint-ominaisuuksien esittely
+        st.markdown("### 📑 PowerPoint-ominaisuudet:")
+        st.markdown("""
+        **Saatavilla olevat diat:**
+        - 📊 **Yhteenveto**: Kokonaisanalyysi ja päätulokset
+        - 🎯 **Tuottavuustavoitteet**: Yksityiskohtainen tavoiteanalyysi
+        - 📊 **Yhdistetty kaavio**: Visuaalinen tuntikohtainen analyysi
+        - 📈 **Tuntikohtainen analyysi**: Syvällinen tuntitason tarkastelu
+        - 📅 **Kuukausinäkymä**: Päivittäiset trendit ja yhteenvedot
+        - 💡 **Suositukset**: Toimenpide-ehdotukset ja optimointi
+        
+        **Kuinka käyttää:**
+        1. Valitse haluamasi diat sivupalkista
+        2. Klikkaa "Luo PowerPoint" -painiketta
+        3. Lataa valmis esitys suoraan selaimesta
+        """)
 
 if __name__ == "__main__":
     main()
