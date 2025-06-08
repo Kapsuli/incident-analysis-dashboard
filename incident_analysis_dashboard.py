@@ -786,22 +786,14 @@ def main():
     st.title("📊 Hälytysten Analyysihallinta")
     st.markdown("**Lataa Excel-tiedosto ja saa automaattinen analyysi hälytysten määrästä suhteessa työntekijöihin**")
     
-    # Sivupalkki
-    with st.sidebar:
-        st.header("⚙️ Asetukset")
-        
-        # Tiedoston lataus
-        uploaded_file = st.file_uploader(
-            "Lataa Excel-tiedosto",
-            type=['xlsx', 'xls'],
-            help="Tiedoston tulee sisältää sarakkeet: 'Hour', 'Incidents handled by agent', ja mahdollisesti 'Date'"
-        )
-        
-        st.markdown("---")
-        
-        # PowerPoint-asetukset
-        st.subheader("📑 PowerPoint-esitys")
-        st.markdown("Valitse diat joita haluat sisällyttää esitykseen:")
+    # PowerPoint-asetukset pääsivulla
+    st.markdown("---")
+    st.subheader("📑 PowerPoint-esityksen asetukset")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("**Valitse diat joita haluat sisällyttää esitykseen:**")
         
         slide_options = [
             "Yhteenveto",
@@ -816,7 +808,39 @@ def main():
             "Valitse diat:",
             slide_options,
             default=["Yhteenveto", "Tuottavuustavoitteet", "Suositukset"],
-            help="Valitse ne diat jotka haluat sisällyttää PowerPoint-esitykseen"
+            help="Valitse ne diat jotka haluat sisällyttää PowerPoint-esitykseen",
+            key="slide_selector"
+        )
+        
+        if selected_slides:
+            st.success(f"✅ Valittu {len(selected_slides)} diaa: {', '.join(selected_slides)}")
+        else:
+            st.warning("⚠️ Valitse vähintään yksi dia luodaksesi PowerPoint-esityksen")
+    
+    with col2:
+        st.markdown("**Diojen kuvaukset:**")
+        descriptions = {
+            "Yhteenveto": "📊 Pääkohdat ja kokonaistilanne",
+            "Tuottavuustavoitteet": "🎯 Tavoitteiden täyttyminen",
+            "Yhdistetty kaavio": "📈 Visuaalinen analyysi",
+            "Tuntikohtainen analyysi": "🕐 Tuntitason tarkastelu",
+            "Kuukausinäkymä": "📅 Päivittäiset trendit",
+            "Suositukset": "💡 Toimenpide-ehdotukset"
+        }
+        
+        for slide in selected_slides:
+            if slide in descriptions:
+                st.write(f"• {descriptions[slide]}")
+    
+    # Sivupalkki
+    with st.sidebar:
+        st.header("⚙️ Asetukset")
+        
+        # Tiedoston lataus
+        uploaded_file = st.file_uploader(
+            "Lataa Excel-tiedosto",
+            type=['xlsx', 'xls'],
+            help="Tiedoston tulee sisältää sarakkeet: 'Hour', 'Incidents handled by agent', ja mahdollisesti 'Date'"
         )
         
         st.markdown("---")
@@ -885,31 +909,39 @@ def main():
                 }
                 
                 # PowerPoint-latausmahdollisuus
+                st.markdown("---")
+                st.subheader("📑 Luo PowerPoint-esitys")
+                
                 if selected_slides and len(selected_slides) > 0:
-                    st.markdown("---")
-                    col1, col2 = st.columns([3, 1])
+                    col1, col2 = st.columns([2, 1])
                     
                     with col1:
-                        st.markdown("### 📑 PowerPoint-esitys")
-                        st.write(f"Valitut diat ({len(selected_slides)}): {', '.join(selected_slides)}")
+                        st.write(f"🎯 **Valitut diat ({len(selected_slides)}):** {', '.join(selected_slides)}")
+                        st.write("📄 Esitys sisältää analyysitulokset ja visualisoinnit valituista osioista")
                     
                     with col2:
-                        if st.button("🔄 Luo PowerPoint", type="primary"):
-                            with st.spinner("Luodaan PowerPoint-esitystä..."):
+                        if st.button("🔄 Luo PowerPoint-esitys", type="primary", use_container_width=True):
+                            with st.spinner("🔄 Luodaan PowerPoint-esitystä..."):
                                 try:
                                     ppt = create_powerpoint_presentation(selected_slides, data_dict)
                                     if ppt:
                                         download_link = download_powerpoint(ppt, f"incident_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx")
                                         if download_link:
-                                            st.success("✅ PowerPoint-esitys luotu!")
+                                            st.success("✅ PowerPoint-esitys luotu onnistuneesti!")
+                                            st.markdown("---")
+                                            st.markdown("### 💾 Lataa esitys:")
                                             st.markdown(download_link, unsafe_allow_html=True)
+                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston")
                                         else:
                                             st.error("❌ PowerPoint-latauslinkin luonti epäonnistui")
                                     else:
                                         st.error("❌ PowerPoint-esityksen luonti epäonnistui")
                                 except Exception as e:
                                     st.error(f"❌ Virhe PowerPoint-esityksen luonnissa: {str(e)}")
-                                    st.info("Varmista että python-pptx kirjasto on asennettu: pip install python-pptx")
+                                    st.info("💡 Varmista että python-pptx kirjasto on asennettu: `pip install python-pptx`")
+                else:
+                    st.warning("⚠️ Valitse vähintään yksi dia yllä olevasta listasta luodaksesi PowerPoint-esityksen")
+                    st.info("👆 Voit valita diat sivun yläosasta PowerPoint-asetuksista")
                 
                 # Tulosten näyttäminen
                 st.header("🎯 Tuottavuustavoitteiden tulokset")
@@ -1252,6 +1284,25 @@ def main():
         # Ohjeet kun ei tiedostoa ladattu
         st.info("👆 Lataa Excel-tiedosto sivupalkista aloittaaksesi analyysin.")
         
+        # Näytä silti PowerPoint-valinnat
+        st.markdown("---")
+        st.subheader("📑 PowerPoint-esityksen esikatseluvaihtoehdot")
+        st.info("💡 PowerPoint-diat aktivoituvat kun olet ladannut ja käsitellyt Excel-tiedoston")
+        
+        # Näytä diojen selitykset
+        slide_descriptions = {
+            "📊 Yhteenveto": "Kokonaisanalyysi ajanjakson tuloksista, incidenttimääristä ja tavoitteiden täyttymisestä",
+            "🎯 Tuottavuustavoitteet": "Yksityiskohtainen analyysi päivä- ja yötyöntekijöiden tuottavuustavoitteista värillisine tuloksineen",
+            "📈 Yhdistetty kaavio": "Visuaalinen esitys tuntikohtaisesta kuormituksesta ja henkilöstömääristä",
+            "🕐 Tuntikohtainen analyysi": "Syvällinen tarkastelu huipputunneista, vuorojärjestelystä ja tehokkuudesta",
+            "📅 Kuukausinäkymä": "Päivittäiset trendit, kuukauden yhteenveto ja kehityksen seuranta",
+            "💡 Suositukset": "Konkreettiset toimenpide-ehdotukset optimointiin ja ongelmien ratkaisuun"
+        }
+        
+        for title, description in slide_descriptions.items():
+            with st.expander(title):
+                st.write(description)
+        
         st.markdown("---")
         st.subheader("📋 Käyttöohjeet")
         st.markdown("""
@@ -1305,6 +1356,9 @@ def main():
         2. Klikkaa "Luo PowerPoint" -painiketta
         3. Lataa valmis esitys suoraan selaimesta
         """)
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
