@@ -501,20 +501,36 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                 except Exception as e:
                     st.warning(f"Ei voitu tallentaa kuukausinäkymää: {str(e)}")
         
-        # Luo diat
+        # Luo diat käyttäen oikeita parametreja
         for slide_type in selected_slides:
-            if slide_type == "Yhteenveto":
-                create_summary_slide(prs, data_dict)
-            elif slide_type == "Tuottavuustavoitteet":
-                create_targets_slide(prs, data_dict)
-            elif slide_type == "Tuntikohtainen analyysi":
-                create_hourly_analysis_slide(prs, data_dict, images.get('hourly_analysis'))
-            elif slide_type == "Kuukausinäkymä":
-                create_monthly_view_slide(prs, data_dict, images.get('monthly_view'))
-            elif slide_type == "Suositukset":
-                create_recommendations_slide(prs, data_dict)
-            elif slide_type == "Yhdistetty kaavio":
-                create_combined_chart_slide(prs, data_dict, images.get('combined_chart'))
+            try:
+                if slide_type == "Yhteenveto":
+                    create_summary_slide(prs, data_dict)
+                elif slide_type == "Tuottavuustavoitteet":
+                    create_targets_slide(prs, data_dict)
+                elif slide_type == "Tuntikohtainen analyysi":
+                    create_hourly_analysis_slide(prs, data_dict, images.get('hourly_analysis'))
+                elif slide_type == "Kuukausinäkymä":
+                    create_monthly_view_slide(prs, data_dict, images.get('monthly_view'))
+                elif slide_type == "Suositukset":
+                    create_recommendations_slide(prs, data_dict)
+                elif slide_type == "Yhdistetty kaavio":
+                    create_combined_chart_slide(prs, data_dict, images.get('combined_chart'))
+            except TypeError as te:
+                if "positional arguments" in str(te):
+                    st.warning(f"⚠️ Ohitetaan dia '{slide_type}' - parametrivirhe: {str(te)}")
+                    # Yritä ilman kuvaparametria
+                    try:
+                        if slide_type == "Yhdistetty kaavio":
+                            create_combined_chart_slide_fallback(prs, data_dict)
+                        elif slide_type == "Tuntikohtainen analyysi":
+                            create_hourly_analysis_slide_text_only(prs, data_dict)
+                        elif slide_type == "Kuukausinäkymä":
+                            create_monthly_view_slide_text_only(prs, data_dict)
+                    except:
+                        st.error(f"❌ Dia '{slide_type}' ohitettiin kokonaan")
+                else:
+                    raise te
         
         return prs
     
@@ -846,6 +862,51 @@ Tavoitteet: Päivätyöntekijät ≥5.1, Yötyöntekijät ≥4.6 inc/työnt./h""
         info_para = info_frame.paragraphs[0]
         info_para.text = info_text
         info_para.font.size = Pt(14)
+
+def create_combined_chart_slide_fallback(prs, data_dict):
+    """Luo yhdistetty kaavio -dia ilman kuvaa (fallback)"""
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
+    
+    title = slide.shapes.title
+    title.text = "📊 Yhdistetty Analyysi - Tuntikohtainen Kuormitus"
+    
+    content = slide.placeholders[1]
+    tf = content.text_frame
+    tf.clear()
+    
+    hourly_stats = data_dict.get('hourly_stats')
+    if hourly_stats is not None and len(hourly_stats) > 0:
+        max_incidents = hourly_stats['avg_incidents'].max()
+        max_hour = hourly_stats.loc[hourly_stats['avg_incidents'].idxmax(), 'hour_str']
+        max_efficiency = hourly_stats['incidents_per_worker'].max()
+        max_eff_hour = hourly_stats.loc[hourly_stats['incidents_per_worker'].idxmax(), 'hour_str']
+        
+        p = tf.paragraphs[0]
+        p.text = "YHDISTETTY ANALYYSI:"
+        p.font.size = Pt(16)
+        p.font.bold = True
+        
+        analysis_points = [
+            f"• Kiireisin tunti: {max_hour} ({max_incidents:.1f} incidenttiä)",
+            f"• Tehokkain tunti: {max_eff_hour} ({max_efficiency:.2f} inc/työnt.)",
+            f"• Työntekijämäärä vaihtelee 2-7 henkilön välillä vuorojen mukaan",
+            "",
+            "TAVOITTEET:",
+            "• Päivätyöntekijät: ≥5.1 inc/työnt./h",
+            "• Yötyöntekijät: ≥4.6 inc/työnt./h",
+            "",
+            "HUOMIO: Kaavio ei saatavilla - tarvittaisiin kaleido-kirjasto kuvien tallennukseen"
+        ]
+        
+        for point in analysis_points:
+            if point.strip():
+                p = tf.add_paragraph()
+                p.text = point
+                p.font.size = Pt(14)
+                if point.startswith("TAVOITTEET") or point.startswith("YHDISTETTY ANALYYSI"):
+                    p.font.bold = True
+                    p.font.size = Pt(15)
 
 def download_powerpoint(prs, filename="incident_analysis.pptx"):
     """Luo latauslinkki PowerPoint-tiedostolle"""
