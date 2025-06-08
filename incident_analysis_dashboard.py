@@ -1020,10 +1020,19 @@ def main():
                                         st.error("❌ PowerPoint-esityksen luonti epäonnistui")
                                 except ImportError:
                                     st.error("❌ PowerPoint-ominaisuus vaatii python-pptx kirjaston")
-                                    st.info("📦 Asenna komennolla: `pip install python-pptx plotly kaleido`")
+                                    st.info("📦 Asenna komennolla: `pip install python-pptx`")
+                                    st.warning("💡 Kuvien tallennukseen tarvitaan myös: `pip install kaleido`")
                                 except Exception as e:
                                     st.error(f"❌ Virhe PowerPoint-esityksen luonnissa: {str(e)}")
-                                    st.info("💡 Varmista että tarvittavat kirjastot on asennettu: `pip install python-pptx plotly kaleido`")
+                                    
+                                    # Tarjoa ratkaisuehdotuksia virhetilanteessa
+                                    if "kaleido" in str(e).lower():
+                                        st.info("📦 Kuvien tallennus vaatii kaleido-kirjaston: `pip install kaleido`")
+                                        st.info("💡 Voit silti luoda PowerPoint-esityksen ilman kuvia")
+                                    elif "takes 2 positional arguments" in str(e):
+                                        st.info("🔧 Funktioparametrien virhe - korjataan seuraavassa päivityksessä")
+                                    else:
+                                        st.info("💡 Varmista että tarvittavat kirjastot on asennettu: `pip install python-pptx plotly kaleido`")
                 else:
                     st.warning("⚠️ Valitse vähintään yksi dia yllä olevasta listasta luodaksesi PowerPoint-esityksen")
                     st.info("👆 Voit valita diat sivun yläosasta PowerPoint-asetuksista")
