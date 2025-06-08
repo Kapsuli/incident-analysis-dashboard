@@ -1,6 +1,6 @@
 streamlit
 pandas
 plotly
+python-pptx
+kaleido
 openpyxl
-numpy
-python-pptx==0.6.21
