@@ -411,28 +411,110 @@ def save_plotly_as_image(fig, filename, width=1200, height=600):
         st.error(f"Virhe kuvaajan tallentamisessa: {str(e)}")
         return None
 
+def save_calendar_as_image(calendar_html, width=1200, height=800):
+    """Tallenna kalenteri HTML:stä kuvaksi (simuloitu)"""
+    # Tämä on placeholder-funktio. Oikeassa toteutuksessa käytettäisiin
+    # esim. selenium + webdriver tai html2image kirjastoa
+    # Nyt palautetaan None, jotta PowerPoint-toiminto toimii muuten
+    return None
+
 def create_powerpoint_presentation(selected_slides, data_dict):
     """Luo PowerPoint-esitys valituista dioista"""
     try:
         # Luo uusi esitys
         prs = Presentation()
         
-        # Aseta oletuslayout
-        slide_layout = prs.slide_layouts[1]  # Title and Content layout
+        # Luo kuvat etukäteen valituille dioille
+        images = {}
         
+        # Tallenna yhdistetty kaavio jos tarvitaan
+        if "Yhdistetty kaavio" in selected_slides:
+            hourly_stats = data_dict.get('hourly_stats')
+            if hourly_stats is not None and len(hourly_stats) > 0:
+                try:
+                    fig_combined = create_combined_chart(hourly_stats)
+                    img_bytes = save_plotly_as_image(fig_combined, "combined_chart", 1400, 700)
+                    if img_bytes:
+                        images['combined_chart'] = img_bytes
+                except Exception as e:
+                    st.warning(f"Ei voitu tallentaa yhdistettyä kaaviota: {str(e)}")
+        
+        # Tallenna tuntikohtainen analyysi kaavio jos tarvitaan
+        if "Tuntikohtainen analyysi" in selected_slides:
+            hourly_stats = data_dict.get('hourly_stats')
+            if hourly_stats is not None and len(hourly_stats) > 0:
+                try:
+                    # Luo incidentit per työntekijä kaavio
+                    fig_hourly = px.line(
+                        hourly_stats, 
+                        x='hour_str', 
+                        y='incidents_per_worker',
+                        title='Incidentit per työntekijä tunnissa',
+                        markers=True
+                    )
+                    fig_hourly.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                        annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                    fig_hourly.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                        annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                    fig_hourly.update_layout(height=500)
+                    
+                    img_bytes = save_plotly_as_image(fig_hourly, "hourly_analysis", 1400, 700)
+                    if img_bytes:
+                        images['hourly_analysis'] = img_bytes
+                except Exception as e:
+                    st.warning(f"Ei voitu tallentaa tuntikohtaista analyysiä: {str(e)}")
+        
+        # Tallenna kuukausinäkymä kaavio jos tarvitaan
+        if "Kuukausinäkymä" in selected_slides:
+            daily_stats = data_dict.get('daily_stats')
+            if daily_stats is not None and len(daily_stats) > 0:
+                try:
+                    # Luo päivittäinen kehitys kaavio
+                    fig_daily = px.line(
+                        daily_stats, 
+                        x='date', 
+                        y=['day_shift_avg', 'night_shift_avg'],
+                        title='Päivittäinen kehitys - Tuottavuustavoitteet',
+                        labels={
+                            'value': 'Inc/työnt./h', 
+                            'variable': 'Vuoro',
+                            'date': 'Päivämäärä'
+                        }
+                    )
+                    
+                    # Muuta legendan nimet suomeksi
+                    fig_daily.for_each_trace(
+                        lambda t: t.update(
+                            name='Päivätyöntekijät' if 'day_shift_avg' in t.name else 'Yötyöntekijät'
+                        )
+                    )
+                    
+                    fig_daily.add_hline(y=5.1, line_dash="dash", line_color="red", 
+                                      annotation_text="Päivätyöntekijöiden tavoite (5.1)")
+                    fig_daily.add_hline(y=4.6, line_dash="dash", line_color="blue", 
+                                      annotation_text="Yötyöntekijöiden tavoite (4.6)")
+                    fig_daily.update_layout(height=500)
+                    
+                    img_bytes = save_plotly_as_image(fig_daily, "monthly_view", 1400, 700)
+                    if img_bytes:
+                        images['monthly_view'] = img_bytes
+                except Exception as e:
+                    st.warning(f"Ei voitu tallentaa kuukausinäkymää: {str(e)}")
+        
+        # Luo diat
         for slide_type in selected_slides:
             if slide_type == "Yhteenveto":
                 create_summary_slide(prs, data_dict)
             elif slide_type == "Tuottavuustavoitteet":
                 create_targets_slide(prs, data_dict)
             elif slide_type == "Tuntikohtainen analyysi":
-                create_hourly_analysis_slide(prs, data_dict)
+                create_hourly_analysis_slide(prs, data_dict, images.get('hourly_analysis'))
             elif slide_type == "Kuukausinäkymä":
-                create_monthly_view_slide(prs, data_dict)
+                create_monthly_view_slide(prs, data_dict, images.get('monthly_view'))
             elif slide_type == "Suositukset":
                 create_recommendations_slide(prs, data_dict)
             elif slide_type == "Yhdistetty kaavio":
-                create_combined_chart_slide(prs, data_dict)
+                create_combined_chart_slide(prs, data_dict, images.get('combined_chart'))
         
         return prs
     
@@ -931,14 +1013,17 @@ def main():
                                             st.markdown("---")
                                             st.markdown("### 💾 Lataa esitys:")
                                             st.markdown(download_link, unsafe_allow_html=True)
-                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston")
+                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston. Esitys sisältää kaaviot kuvina valituista osioista.")
                                         else:
                                             st.error("❌ PowerPoint-latauslinkin luonti epäonnistui")
                                     else:
                                         st.error("❌ PowerPoint-esityksen luonti epäonnistui")
+                                except ImportError:
+                                    st.error("❌ PowerPoint-ominaisuus vaatii python-pptx kirjaston")
+                                    st.info("📦 Asenna komennolla: `pip install python-pptx plotly kaleido`")
                                 except Exception as e:
                                     st.error(f"❌ Virhe PowerPoint-esityksen luonnissa: {str(e)}")
-                                    st.info("💡 Varmista että python-pptx kirjasto on asennettu: `pip install python-pptx`")
+                                    st.info("💡 Varmista että tarvittavat kirjastot on asennettu: `pip install python-pptx plotly kaleido`")
                 else:
                     st.warning("⚠️ Valitse vähintään yksi dia yllä olevasta listasta luodaksesi PowerPoint-esityksen")
                     st.info("👆 Voit valita diat sivun yläosasta PowerPoint-asetuksista")
@@ -1356,9 +1441,6 @@ def main():
         2. Klikkaa "Luo PowerPoint" -painiketta
         3. Lataa valmis esitys suoraan selaimesta
         """)
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
