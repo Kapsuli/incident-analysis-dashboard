@@ -1020,19 +1020,45 @@ def main():
                                         st.error("❌ PowerPoint-esityksen luonti epäonnistui")
                                 except ImportError:
                                     st.error("❌ PowerPoint-ominaisuus vaatii python-pptx kirjaston")
-                                    st.info("📦 Asenna komennolla: `pip install python-pptx`")
-                                    st.warning("💡 Kuvien tallennukseen tarvitaan myös: `pip install kaleido`")
+                                    st.info("📦 Lisää requirements.txt tiedostoon: `python-pptx`")
+                                    if st.checkbox("🔧 Näytä Streamlit Cloud ohjeet"):
+                                        st.markdown("""
+                                        **Streamlit Cloud:ssa:**
+                                        1. Lisää projektisi juureen `requirements.txt` tiedosto
+                                        2. Sisällytä seuraavat rivit:
+                                        ```
+                                        streamlit
+                                        pandas
+                                        plotly
+                                        python-pptx
+                                        kaleido
+                                        openpyxl
+                                        ```
+                                        3. Commitoi muutokset GitHubiin
+                                        4. Streamlit Cloud asentaa kirjastot automaattisesti
+                                        """)
                                 except Exception as e:
                                     st.error(f"❌ Virhe PowerPoint-esityksen luonnissa: {str(e)}")
                                     
-                                    # Tarjoa ratkaisuehdotuksia virhetilanteessa
-                                    if "kaleido" in str(e).lower():
-                                        st.info("📦 Kuvien tallennus vaatii kaleido-kirjaston: `pip install kaleido`")
-                                        st.info("💡 Voit silti luoda PowerPoint-esityksen ilman kuvia")
+                                    # Streamlit Cloud -spesifiset virheilmoitukset
+                                    if "streamlit" in str(e).lower() or "cloud" in str(e).lower():
+                                        st.info("☁️ Streamlit Cloud -ympäristössä havaittu ongelma")
+                                        st.info("💡 PowerPoint toimii ilman kuvia - yritä uudelleen")
+                                    elif "kaleido" in str(e).lower():
+                                        st.info("📦 Kuvien tallennus ei onnistu, mutta PowerPoint luodaan ilman kuvia")
+                                        st.info("☁️ Streamlit Cloud:ssa kaleido ei aina toimi - tämä on normaalia")
                                     elif "takes 2 positional arguments" in str(e):
-                                        st.info("🔧 Funktioparametrien virhe - korjataan seuraavassa päivityksessä")
+                                        st.info("🔧 Funktioparametrien virhe - yritä valita vähemmän diat")
                                     else:
-                                        st.info("💡 Varmista että tarvittavat kirjastot on asennettu: `pip install python-pptx plotly kaleido`")
+                                        st.info("💡 Varmista että requirements.txt sisältää: python-pptx, plotly, pandas")
+                                        
+                                        if st.checkbox("🐛 Näytä debug-tiedot"):
+                                            st.code(f"Virhe: {str(e)}")
+                                            st.code(f"Virhetyyppi: {type(e).__name__}")
+                                    
+                                    # Tarjoa vaihtoehtoinen ratkaisu
+                                    st.markdown("---")
+                                    st.info("🔄 **Vaihtoehtoinen ratkaisu:** Kokeile luoda PowerPoint vähemmällä dialla tai pelkällä tekstisisällöllä")
                 else:
                     st.warning("⚠️ Valitse vähintään yksi dia yllä olevasta listasta luodaksesi PowerPoint-esityksen")
                     st.info("👆 Voit valita diat sivun yläosasta PowerPoint-asetuksista")
