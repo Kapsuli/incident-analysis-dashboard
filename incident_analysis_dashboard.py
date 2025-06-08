@@ -146,8 +146,8 @@ def create_calendar_view(daily_stats):
                         border_width = "2px"
                     
                     # Määritä P: ja Y: tekstien värit tavoitteiden mukaan
-                    day_text_color = "#28a745" if row['day_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
-                    night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"  # Vihreä jos tavoite täyttyy, muuten punainen
+                    day_text_color = "#28a745" if row['day_target_met'] else "#dc3545"
+                    night_text_color = "#28a745" if row['night_target_met'] else "#dc3545"
                     
                     calendar_html += f"""
                     <td style="padding: 10px; border: {border_width} solid {border_color}; background-color: {bg_color}; vertical-align: top; height: 85px; position: relative; transition: all 0.3s ease;">
@@ -402,49 +402,52 @@ def create_combined_chart(hourly_df):
     
     return fig
 
-def save_plotly_as_image(fig, filename, width=1200, height=600):
-    """Tallenna Plotly-kuvaaja PNG-muodossa"""
+def save_plotly_as_image(fig, width=1200, height=600):
+    """Tallenna Plotly-kuvaaja PNG-muodossa (Streamlit Cloud yhteensopiva)"""
     try:
+        # Yritä ensin kaleido
         img_bytes = pio.to_image(fig, format="png", width=width, height=height, scale=2)
         return img_bytes
-    except Exception as e:
-        st.error(f"Virhe kuvaajan tallentamisessa: {str(e)}")
-        return None
-
-def save_calendar_as_image(calendar_html, width=1200, height=800):
-    """Tallenna kalenteri HTML:stä kuvaksi (simuloitu)"""
-    # Tämä on placeholder-funktio. Oikeassa toteutuksessa käytettäisiin
-    # esim. selenium + webdriver tai html2image kirjastoa
-    # Nyt palautetaan None, jotta PowerPoint-toiminto toimii muuten
-    return None
+    except Exception as kaleido_error:
+        st.warning(f"Kaleido ei käytettävissä: {str(kaleido_error)}")
+        try:
+            # Yritä orca fallback
+            img_bytes = pio.to_image(fig, format="png", width=width, height=height, engine="orca")
+            return img_bytes
+        except Exception as orca_error:
+            st.info(f"Orca ei käytettävissä: {str(orca_error)}")
+            # Palauta None - PowerPoint luodaan ilman kuvia
+            return None
 
 def create_powerpoint_presentation(selected_slides, data_dict):
-    """Luo PowerPoint-esitys valituista dioista"""
+    """Luo PowerPoint-esitys valituista dioista (korjattu versio)"""
     try:
         # Luo uusi esitys
         prs = Presentation()
         
-        # Luo kuvat etukäteen valituille dioille
+        # Luo kuvat etukäteen jos mahdollista
         images = {}
         
-        # Tallenna yhdistetty kaavio jos tarvitaan
+        # Yritä tallentaa yhdistetty kaavio jos tarvitaan
         if "Yhdistetty kaavio" in selected_slides:
             hourly_stats = data_dict.get('hourly_stats')
             if hourly_stats is not None and len(hourly_stats) > 0:
                 try:
                     fig_combined = create_combined_chart(hourly_stats)
-                    img_bytes = save_plotly_as_image(fig_combined, "combined_chart", 1400, 700)
+                    img_bytes = save_plotly_as_image(fig_combined, 1400, 700)
                     if img_bytes:
                         images['combined_chart'] = img_bytes
+                        st.success("✅ Yhdistetty kaavio tallennettu PowerPointiin")
+                    else:
+                        st.info("ℹ️ Yhdistetty kaavio luodaan ilman kuvaa")
                 except Exception as e:
-                    st.warning(f"Ei voitu tallentaa yhdistettyä kaaviota: {str(e)}")
+                    st.warning(f"Yhdistetyn kaavion tallennus epäonnistui: {str(e)}")
         
-        # Tallenna tuntikohtainen analyysi kaavio jos tarvitaan
+        # Yritä tallentaa tuntikohtainen analyysi jos tarvitaan
         if "Tuntikohtainen analyysi" in selected_slides:
             hourly_stats = data_dict.get('hourly_stats')
             if hourly_stats is not None and len(hourly_stats) > 0:
                 try:
-                    # Luo incidentit per työntekijä kaavio
                     fig_hourly = px.line(
                         hourly_stats, 
                         x='hour_str', 
@@ -458,18 +461,20 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                                         annotation_text="Yötyöntekijöiden tavoite (4.6)")
                     fig_hourly.update_layout(height=500)
                     
-                    img_bytes = save_plotly_as_image(fig_hourly, "hourly_analysis", 1400, 700)
+                    img_bytes = save_plotly_as_image(fig_hourly, 1400, 700)
                     if img_bytes:
                         images['hourly_analysis'] = img_bytes
+                        st.success("✅ Tuntikohtainen analyysi tallennettu PowerPointiin")
+                    else:
+                        st.info("ℹ️ Tuntikohtainen analyysi luodaan ilman kuvaa")
                 except Exception as e:
-                    st.warning(f"Ei voitu tallentaa tuntikohtaista analyysiä: {str(e)}")
+                    st.warning(f"Tuntikohtaisen analyysin tallennus epäonnistui: {str(e)}")
         
-        # Tallenna kuukausinäkymä kaavio jos tarvitaan
+        # Yritä tallentaa kuukausinäkymä jos tarvitaan
         if "Kuukausinäkymä" in selected_slides:
             daily_stats = data_dict.get('daily_stats')
             if daily_stats is not None and len(daily_stats) > 0:
                 try:
-                    # Luo päivittäinen kehitys kaavio
                     fig_daily = px.line(
                         daily_stats, 
                         x='date', 
@@ -495,13 +500,17 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                                       annotation_text="Yötyöntekijöiden tavoite (4.6)")
                     fig_daily.update_layout(height=500)
                     
-                    img_bytes = save_plotly_as_image(fig_daily, "monthly_view", 1400, 700)
+                    img_bytes = save_plotly_as_image(fig_daily, 1400, 700)
                     if img_bytes:
                         images['monthly_view'] = img_bytes
+                        st.success("✅ Kuukausinäkymä tallennettu PowerPointiin")
+                    else:
+                        st.info("ℹ️ Kuukausinäkymä luodaan ilman kuvaa")
                 except Exception as e:
-                    st.warning(f"Ei voitu tallentaa kuukausinäkymää: {str(e)}")
+                    st.warning(f"Kuukausinäkymän tallennus epäonnistui: {str(e)}")
         
-        # Luo diat käyttäen korjattuja funktioita
+        # Luo diat (korjatut funktiot)
+        slides_created = 0
         for slide_type in selected_slides:
             try:
                 if slide_type == "Yhteenveto":
@@ -517,17 +526,19 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                 elif slide_type == "Yhdistetty kaavio":
                     create_combined_chart_slide(prs, data_dict, images.get('combined_chart'))
                 
-                # Onnistunut dia
+                slides_created += 1
                 st.success(f"✅ Dia '{slide_type}' luotu onnistuneesti")
                 
             except Exception as e:
                 st.warning(f"⚠️ Dia '{slide_type}' ohitettiin: {str(e)}")
                 continue
         
-        # Poista vanhat fallback-funktiot jotka eivät ole enää tarpeen
-        st.info(f"📊 PowerPoint-esitys luotu {len(prs.slides)} dialla")
-        
-        return prs
+        if slides_created > 0:
+            st.info(f"📊 PowerPoint-esitys luotu {slides_created} dialla")
+            return prs
+        else:
+            st.error("❌ Ei yhtään diaa voitu luoda")
+            return None
     
     except Exception as e:
         st.error(f"Virhe PowerPoint-esityksen luonnissa: {str(e)}")
@@ -645,7 +656,7 @@ def create_targets_slide(prs, data_dict):
     p.font.size = Pt(14)
     p.font.color.rgb = RGBColor(0, 100, 0) if night_avg >= 4.6 else RGBColor(200, 0, 0)
 
-def create_hourly_analysis_slide(prs, data_dict):
+def create_hourly_analysis_slide(prs, data_dict, image_data=None):
     """Luo tuntikohtainen analyysi -dia"""
     slide_layout = prs.slide_layouts[1]
     slide = prs.slides.add_slide(slide_layout)
@@ -691,8 +702,33 @@ def create_hourly_analysis_slide(prs, data_dict):
                 if finding.startswith("VUOROJÄRJESTELY"):
                     p.font.bold = True
                     p.font.size = Pt(15)
+        
+        # Lisää kuva jos saatavilla
+        if image_data:
+            try:
+                # Tallenna kuva väliaikaisesti
+                image_stream = io.BytesIO(image_data)
+                
+                # Lisää kuva diaan
+                left = Inches(1)
+                top = Inches(4)
+                width = Inches(8)
+                height = Inches(3)
+                
+                slide.shapes.add_picture(image_stream, left, top, width, height)
+                
+                # Lisää huomautus kuvasta
+                p = tf.add_paragraph()
+                p.text = ""
+                p = tf.add_paragraph()
+                p.text = "📊 Kaavio: Tuntikohtainen tehokkuusanalyysi"
+                p.font.size = Pt(12)
+                p.font.italic = True
+                
+            except Exception as e:
+                st.warning(f"Kuvan lisääminen epäonnistui: {str(e)}")
 
-def create_monthly_view_slide(prs, data_dict):
+def create_monthly_view_slide(prs, data_dict, image_data=None):
     """Luo kuukausinäkymä-dia"""
     slide_layout = prs.slide_layouts[1]
     slide = prs.slides.add_slide(slide_layout)
@@ -742,6 +778,26 @@ def create_monthly_view_slide(prs, data_dict):
                 if stat.startswith("PÄIVITTÄINEN KEHITYS"):
                     p.font.bold = True
                     p.font.size = Pt(15)
+        
+        # Lisää kuva jos saatavilla
+        if image_data:
+            try:
+                image_stream = io.BytesIO(image_data)
+                left = Inches(1)
+                top = Inches(4.5)
+                width = Inches(8)
+                height = Inches(2.5)
+                slide.shapes.add_picture(image_stream, left, top, width, height)
+                
+                p = tf.add_paragraph()
+                p.text = ""
+                p = tf.add_paragraph()
+                p.text = "📊 Kaavio: Päivittäinen kehitysanalyysi"
+                p.font.size = Pt(12)
+                p.font.italic = True
+                
+            except Exception as e:
+                st.warning(f"Kuvan lisääminen epäonnistui: {str(e)}")
 
 def create_recommendations_slide(prs, data_dict):
     """Luo suositukset-dia"""
@@ -822,44 +878,8 @@ def create_recommendations_slide(prs, data_dict):
                     p.font.bold = True
                     p.font.size = Pt(15)
 
-def create_combined_chart_slide(prs, data_dict):
+def create_combined_chart_slide(prs, data_dict, image_data=None):
     """Luo yhdistetty kaavio -dia"""
-    slide_layout = prs.slide_layouts[5]  # Blank layout for chart
-    slide = prs.slides.add_slide(slide_layout)
-    
-    # Lisää otsikko
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(9), Inches(1))
-    title_frame = title_box.text_frame
-    title_para = title_frame.paragraphs[0]
-    title_para.text = "📊 Yhdistetty Analyysi - Tuntikohtainen Kuormitus"
-    title_para.font.size = Pt(24)
-    title_para.font.bold = True
-    title_para.alignment = PP_ALIGN.CENTER
-    
-    # Lisää selitysteksti
-    info_box = slide.shapes.add_textbox(Inches(0.5), Inches(6), Inches(9), Inches(1.5))
-    info_frame = info_box.text_frame
-    
-    hourly_stats = data_dict.get('hourly_stats')
-    if hourly_stats is not None and len(hourly_stats) > 0:
-        max_incidents = hourly_stats['avg_incidents'].max()
-        max_hour = hourly_stats.loc[hourly_stats['avg_incidents'].idxmax(), 'hour_str']
-        max_efficiency = hourly_stats['incidents_per_worker'].max()
-        max_eff_hour = hourly_stats.loc[hourly_stats['incidents_per_worker'].idxmax(), 'hour_str']
-        
-        info_text = f"""Kaavio näyttää:
-• Sininen pylväs: Keskimääräiset incidentit tunnissa (maksimi {max_incidents:.1f} klo {max_hour})
-• Punainen viiva: Incidentit per työntekijä (maksimi {max_efficiency:.2f} klo {max_eff_hour})
-• Vihreä viiva: Työntekijämäärä vuoroittain (2-7 henkilöä)
-
-Tavoitteet: Päivätyöntekijät ≥5.1, Yötyöntekijät ≥4.6 inc/työnt./h"""
-        
-        info_para = info_frame.paragraphs[0]
-        info_para.text = info_text
-        info_para.font.size = Pt(14)
-
-def create_combined_chart_slide_fallback(prs, data_dict):
-    """Luo yhdistetty kaavio -dia ilman kuvaa (fallback)"""
     slide_layout = prs.slide_layouts[1]
     slide = prs.slides.add_slide(slide_layout)
     
@@ -889,19 +909,49 @@ def create_combined_chart_slide_fallback(prs, data_dict):
             "",
             "TAVOITTEET:",
             "• Päivätyöntekijät: ≥5.1 inc/työnt./h",
-            "• Yötyöntekijät: ≥4.6 inc/työnt./h",
-            "",
-            "HUOMIO: Kaavio ei saatavilla - tarvittaisiin kaleido-kirjasto kuvien tallennukseen"
+            "• Yötyöntekijät: ≥4.6 inc/työnt./h"
         ]
         
-        for point in analysis_points:
-            if point.strip():
-                p = tf.add_paragraph()
-                p.text = point
-                p.font.size = Pt(14)
-                if point.startswith("TAVOITTEET") or point.startswith("YHDISTETTY ANALYYSI"):
-                    p.font.bold = True
-                    p.font.size = Pt(15)
+        if image_data:
+            # Jos kuva on saatavilla, lisää se
+            try:
+                image_stream = io.BytesIO(image_data)
+                left = Inches(1)
+                top = Inches(3)
+                width = Inches(8)
+                height = Inches(4)
+                slide.shapes.add_picture(image_stream, left, top, width, height)
+                
+                # Lyhyempi tekstiosuus kun kuva on mukana
+                for point in analysis_points[:4]:  # Vain ensimmäiset 4 kohtaa
+                    if point.strip():
+                        p = tf.add_paragraph()
+                        p.text = point
+                        p.font.size = Pt(14)
+                
+            except Exception as e:
+                st.warning(f"Kuvan lisääminen epäonnistui: {str(e)}")
+                # Fallback ilman kuvaa
+                for point in analysis_points:
+                    if point.strip():
+                        p = tf.add_paragraph()
+                        p.text = point
+                        p.font.size = Pt(14)
+                        if point.startswith("TAVOITTEET"):
+                            p.font.bold = True
+                            p.font.size = Pt(15)
+        else:
+            # Ei kuvaa - näytä kaikki tekstit
+            analysis_points.append("⚠️ Kaavio ei saatavilla - kaleido-kirjasto puuttuu")
+            
+            for point in analysis_points:
+                if point.strip():
+                    p = tf.add_paragraph()
+                    p.text = point
+                    p.font.size = Pt(14)
+                    if point.startswith("TAVOITTEET") or point.startswith("YHDISTETTY ANALYYSI"):
+                        p.font.bold = True
+                        p.font.size = Pt(15)
 
 def download_powerpoint(prs, filename="incident_analysis.pptx"):
     """Luo latauslinkki PowerPoint-tiedostolle"""
@@ -1069,18 +1119,11 @@ def main():
                                             st.markdown("---")
                                             st.markdown("### 💾 Lataa esitys:")
                                             st.markdown(download_link, unsafe_allow_html=True)
-                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston. Esitys sisältää kaaviot kuvina jos kaleido-kirjasto on asennettu.")
+                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston. Kuvat sisältyvät jos kaleido-kirjasto on asennettu.")
                                             
                                             # Näytä mitä sisältyy esitykseen
-                                            if len(prs.slides) > 0:
-                                                st.success(f"📑 Esitys sisältää {len(prs.slides)} diaa valituista {len(selected_slides)} diasta")
-                                                
-                                                # Tarkista onko kuvia mukana
-                                                image_count = sum(1 for img in images.values() if img is not None)
-                                                if image_count > 0:
-                                                    st.success(f"🖼️ Sisältää {image_count} kaaviokuvaa")
-                                                else:
-                                                    st.info("📝 Kuvat eivät ole mukana - asenna 'kaleido' saadaksesi kaaviot PowerPointiin")
+                                            if len(ppt.slides) > 0:
+                                                st.success(f"📑 Esitys sisältää {len(ppt.slides)} diaa valituista {len(selected_slides)} diasta")
                                         else:
                                             st.error("❌ PowerPoint-latauslinkin luonti epäonnistui")
                                     else:
@@ -1114,8 +1157,6 @@ def main():
                                     elif "kaleido" in str(e).lower():
                                         st.info("📦 Kuvien tallennus ei onnistu, mutta PowerPoint luodaan ilman kuvia")
                                         st.info("☁️ Streamlit Cloud:ssa kaleido ei aina toimi - tämä on normaalia")
-                                    elif "takes 2 positional arguments" in str(e):
-                                        st.info("🔧 Funktioparametrien virhe - yritä valita vähemmän diat")
                                     else:
                                         st.info("💡 Varmista että requirements.txt sisältää: python-pptx, plotly, pandas")
                                         
