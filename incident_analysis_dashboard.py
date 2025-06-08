@@ -501,7 +501,7 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                 except Exception as e:
                     st.warning(f"Ei voitu tallentaa kuukausinäkymää: {str(e)}")
         
-        # Luo diat käyttäen oikeita parametreja
+        # Luo diat käyttäen korjattuja funktioita
         for slide_type in selected_slides:
             try:
                 if slide_type == "Yhteenveto":
@@ -516,21 +516,16 @@ def create_powerpoint_presentation(selected_slides, data_dict):
                     create_recommendations_slide(prs, data_dict)
                 elif slide_type == "Yhdistetty kaavio":
                     create_combined_chart_slide(prs, data_dict, images.get('combined_chart'))
-            except TypeError as te:
-                if "positional arguments" in str(te):
-                    st.warning(f"⚠️ Ohitetaan dia '{slide_type}' - parametrivirhe: {str(te)}")
-                    # Yritä ilman kuvaparametria
-                    try:
-                        if slide_type == "Yhdistetty kaavio":
-                            create_combined_chart_slide_fallback(prs, data_dict)
-                        elif slide_type == "Tuntikohtainen analyysi":
-                            create_hourly_analysis_slide_text_only(prs, data_dict)
-                        elif slide_type == "Kuukausinäkymä":
-                            create_monthly_view_slide_text_only(prs, data_dict)
-                    except:
-                        st.error(f"❌ Dia '{slide_type}' ohitettiin kokonaan")
-                else:
-                    raise te
+                
+                # Onnistunut dia
+                st.success(f"✅ Dia '{slide_type}' luotu onnistuneesti")
+                
+            except Exception as e:
+                st.warning(f"⚠️ Dia '{slide_type}' ohitettiin: {str(e)}")
+                continue
+        
+        # Poista vanhat fallback-funktiot jotka eivät ole enää tarpeen
+        st.info(f"📊 PowerPoint-esitys luotu {len(prs.slides)} dialla")
         
         return prs
     
@@ -1074,7 +1069,18 @@ def main():
                                             st.markdown("---")
                                             st.markdown("### 💾 Lataa esitys:")
                                             st.markdown(download_link, unsafe_allow_html=True)
-                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston. Esitys sisältää kaaviot kuvina valituista osioista.")
+                                            st.info("💡 Klikkaa linkkiä ladataksesi PowerPoint-tiedoston. Esitys sisältää kaaviot kuvina jos kaleido-kirjasto on asennettu.")
+                                            
+                                            # Näytä mitä sisältyy esitykseen
+                                            if len(prs.slides) > 0:
+                                                st.success(f"📑 Esitys sisältää {len(prs.slides)} diaa valituista {len(selected_slides)} diasta")
+                                                
+                                                # Tarkista onko kuvia mukana
+                                                image_count = sum(1 for img in images.values() if img is not None)
+                                                if image_count > 0:
+                                                    st.success(f"🖼️ Sisältää {image_count} kaaviokuvaa")
+                                                else:
+                                                    st.info("📝 Kuvat eivät ole mukana - asenna 'kaleido' saadaksesi kaaviot PowerPointiin")
                                         else:
                                             st.error("❌ PowerPoint-latauslinkin luonti epäonnistui")
                                     else:
